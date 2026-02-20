@@ -110,5 +110,5 @@ test('runCli renders help for unknown command and exits with failure', () => {
   const { deps, calls } = makeDeps();
   const exitCode = runCli(['unknown'], deps);
   assert.equal(exitCode, 1);
-  assert.ok(calls.logs.some((line) => line.includes('ai-review-hook <command> [options]')));
+  assert.ok(calls.logs.some((line) => line.includes('ai-diff-review <command> [options]')));
 });
