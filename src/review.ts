@@ -173,7 +173,7 @@ function getStagedDiff(): string {
   return git(['diff', '--cached', '--no-color']);
 }
 
-function buildPrompt(diff: string, cwd = process.cwd()): string {
+export function buildPrompt(diff: string, cwd = process.cwd(), diffLabel = 'Staged diff'): string {
   const context = buildAgentsContext(cwd);
   return [
     ...resolvePromptHeaderLines(),
@@ -191,7 +191,7 @@ function buildPrompt(diff: string, cwd = process.cwd()): string {
     'Respond with ONLY a JSON object matching this schema (no markdown, no backticks, no explanation):',
     JSON.stringify(REVIEW_SCHEMA, null, 2),
     '',
-    'Staged diff:',
+    `${diffLabel}:`,
     diff,
   ].join('\n');
 }

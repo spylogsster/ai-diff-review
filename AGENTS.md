@@ -20,6 +20,8 @@ All contributors and AI agents must follow these rules.
   - pre-commit lock flow in `src/precommit.ts`
   - hook installer in `src/install.ts`
   - prompt/context building in `src/prompt.ts`
+  - git utilities in `src/git.ts`
+  - review JSON schema in `src/schema.ts`
   - shared types in `src/types.ts`
 - Do not collapse domains into a single large file.
 - Export testable pure functions for parsing, policy extraction, and verdict logic.
@@ -33,7 +35,7 @@ All contributors and AI agents must follow these rules.
 - Prompt must include:
   - full `AGENTS.md`
   - tracked markdown files referenced by `AGENTS.md` (including wildcard references)
-  - staged diff only
+  - staged diff (for `review` command) or branch-to-branch diff (for `diff` command)
 - Do not include untracked/local arbitrary files in prompt context.
 - Prompt header defaults must be stable and secure; allow override only through explicit config (`AI_REVIEW_PROMPT_HEADER`).
 - Secrets must never be stored in repository files.

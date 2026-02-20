@@ -3,6 +3,9 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import {
   parseSubagentOutput,
   evaluateResults,
@@ -12,6 +15,7 @@ import {
   logVerboseRunnerOutput,
   needsShellForBinary,
   buildSpawnOptions,
+  buildPrompt,
   runReview,
   hasApiToken,
   checkPreflight,
@@ -627,6 +631,31 @@ test('checkPreflight returns false when no token and canReach fails', () => {
   } finally {
     if (saved === undefined) delete process.env.GITHUB_TOKEN;
     else process.env.GITHUB_TOKEN = saved;
+  }
+});
+
+test('buildPrompt uses custom diffLabel when provided', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ai-review-test-'));
+  writeFileSync(join(tempDir, 'AGENTS.md'), '# Test agents', 'utf8');
+  try {
+    const prompt = buildPrompt('some diff content', tempDir, 'Branch diff (main...feature)');
+    assert.ok(prompt.includes('Branch diff (main...feature):'));
+    assert.ok(!prompt.includes('Staged diff:'));
+    assert.ok(prompt.includes('some diff content'));
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('buildPrompt uses default Staged diff label when no diffLabel provided', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ai-review-test-'));
+  writeFileSync(join(tempDir, 'AGENTS.md'), '# Test agents', 'utf8');
+  try {
+    const prompt = buildPrompt('some diff content', tempDir);
+    assert.ok(prompt.includes('Staged diff:'));
+    assert.ok(prompt.includes('some diff content'));
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
   }
 });
 

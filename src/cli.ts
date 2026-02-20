@@ -1,9 +1,10 @@
 /* SPDX-License-Identifier: MPL-2.0
  * Copyright (c) 2026 ai-review contributors
  */
-import { runReview } from './review.js';
+import { runReview, buildPrompt } from './review.js';
 import { runPreCommit } from './precommit.js';
 import { installPreCommitHook } from './install.js';
+import { getDiffBetweenRefs } from './git.js';
 
 export interface CliDeps {
   runReview: typeof runReview;
@@ -25,9 +26,10 @@ function printHelp(log: (message: string) => void): void {
   log('git-ai-review <command> [options]');
   log('');
   log('Commands:');
-  log('  review      Run AI review for staged changes');
-  log('  pre-commit  Run lock-aware pre-commit flow');
-  log('  install     Install .githooks/pre-commit and set core.hooksPath');
+  log('  review                Run AI review for staged changes');
+  log('  diff <base> [head]    Run AI review for diff between branches');
+  log('  pre-commit            Run lock-aware pre-commit flow');
+  log('  install               Install .githooks/pre-commit and set core.hooksPath');
   log('');
   log('Options:');
   log('  --codex     Force Codex reviewer only (skip Copilot/Claude fallback)');
@@ -71,6 +73,21 @@ export async function runCli(argv = process.argv.slice(2), deps: CliDeps = DEFAU
 
   if (command === 'review') {
     const result = await deps.runReview(cwd, { verbose, reviewer });
+    return result.pass ? 0 : 1;
+  }
+
+  if (command === 'diff') {
+    const positional = args.filter((a) => !a.startsWith('--'));
+    const base = positional[0];
+    const head = positional[1] || 'HEAD';
+    if (!base) {
+      deps.log('Error: diff command requires a base branch. Usage: git-ai-review diff <base> [head]');
+      return 1;
+    }
+    const result = await deps.runReview(cwd, { verbose, reviewer }, {
+      getStagedDiff: () => getDiffBetweenRefs(base, head, cwd),
+      buildPrompt: (diff, promptCwd) => buildPrompt(diff, promptCwd, `Branch diff (${base}...${head})`),
+    });
     return result.pass ? 0 : 1;
   }
 
