@@ -3,6 +3,30 @@
 
 Review your git diff with your locally installed **Codex CLI** or **Copilot CLI** — run it manually in one command or automatically as a git pre-commit hook.
 
+## Quick start
+
+Install and set up the git hook:
+
+```bash
+npm i -D git-ai-review
+npx git-ai-review install
+```
+
+That's it. Every `git commit` will now run an AI review of your staged changes automatically.
+
+You can also run reviews manually:
+
+```bash
+npx git-ai-review review
+npx git-ai-review review --verbose
+npx git-ai-review review --codex
+npx git-ai-review review --copilot
+```
+
+Requirements for the target repo:
+- An `AGENTS.md` file must exist in the repo root (it's used as policy context for the review)
+- At least one reviewer CLI must be installed and authenticated: **Codex CLI** (`codex login`) or **Copilot CLI** (`copilot auth`)
+
 ## License
 
 This package is licensed under **MPL-2.0**.
