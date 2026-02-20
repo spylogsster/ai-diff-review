@@ -7,15 +7,17 @@ import { hasVerboseFlag, hasClaudeFlag, hasCodexFlag, hasCopilotFlag, runCli, ty
 
 function makeDeps() {
   const calls = {
-    runReview: [] as Array<{ cwd: string; options: { verbose: boolean; reviewer?: string } }>,
+    runReview: [] as Array<{ cwd: string; options: { verbose: boolean; reviewer?: string }; hasDepsOverride: boolean }>,
     runPreCommit: [] as Array<{ cwd: string; options: { verbose: boolean; reviewer?: string } }>,
     install: 0,
     logs: [] as string[],
+    lastDepsOverride: undefined as Record<string, unknown> | undefined,
   };
 
   const deps: CliDeps = {
-    runReview: async (cwd, options) => {
-      calls.runReview.push({ cwd, options: { verbose: options?.verbose === true, reviewer: options?.reviewer } });
+    runReview: async (cwd, options, depsOverride) => {
+      calls.runReview.push({ cwd, options: { verbose: options?.verbose === true, reviewer: options?.reviewer }, hasDepsOverride: depsOverride !== undefined && Object.keys(depsOverride).length > 0 });
+      calls.lastDepsOverride = depsOverride as Record<string, unknown> | undefined;
       return { pass: true, reportPath: 'report.json', reason: 'ok' };
     },
     runPreCommit: async (cwd, options) => {
@@ -43,7 +45,7 @@ test('runCli passes verbose=true to review command', async () => {
   const { deps, calls } = makeDeps();
   const exitCode = await runCli(['review', '--verbose'], deps);
   assert.equal(exitCode, 0);
-  assert.deepEqual(calls.runReview, [{ cwd: '/tmp/repo', options: { verbose: true, reviewer: undefined } }]);
+  assert.deepEqual(calls.runReview, [{ cwd: '/tmp/repo', options: { verbose: true, reviewer: undefined }, hasDepsOverride: false }]);
 });
 
 test('runCli passes verbose=true to pre-commit command', async () => {
@@ -67,14 +69,14 @@ test('runCli passes reviewer=codex to review command', async () => {
   const { deps, calls } = makeDeps();
   const exitCode = await runCli(['review', '--codex'], deps);
   assert.equal(exitCode, 0);
-  assert.deepEqual(calls.runReview, [{ cwd: '/tmp/repo', options: { verbose: false, reviewer: 'codex' } }]);
+  assert.deepEqual(calls.runReview, [{ cwd: '/tmp/repo', options: { verbose: false, reviewer: 'codex' }, hasDepsOverride: false }]);
 });
 
 test('runCli passes reviewer=copilot to review command', async () => {
   const { deps, calls } = makeDeps();
   const exitCode = await runCli(['review', '--copilot'], deps);
   assert.equal(exitCode, 0);
-  assert.deepEqual(calls.runReview, [{ cwd: '/tmp/repo', options: { verbose: false, reviewer: 'copilot' } }]);
+  assert.deepEqual(calls.runReview, [{ cwd: '/tmp/repo', options: { verbose: false, reviewer: 'copilot' }, hasDepsOverride: false }]);
 });
 
 test('runCli passes reviewer=codex to pre-commit command', async () => {
@@ -127,7 +129,7 @@ test('runCli passes no reviewer when neither flag is set', async () => {
   const { deps, calls } = makeDeps();
   const exitCode = await runCli(['review'], deps);
   assert.equal(exitCode, 0);
-  assert.deepEqual(calls.runReview, [{ cwd: '/tmp/repo', options: { verbose: false, reviewer: undefined } }]);
+  assert.deepEqual(calls.runReview, [{ cwd: '/tmp/repo', options: { verbose: false, reviewer: undefined }, hasDepsOverride: false }]);
 });
 
 test('hasClaudeFlag detects --claude option', () => {
@@ -139,7 +141,7 @@ test('runCli passes reviewer=claude to review command', async () => {
   const { deps, calls } = makeDeps();
   const exitCode = await runCli(['review', '--claude'], deps);
   assert.equal(exitCode, 0);
-  assert.deepEqual(calls.runReview, [{ cwd: '/tmp/repo', options: { verbose: false, reviewer: 'claude' } }]);
+  assert.deepEqual(calls.runReview, [{ cwd: '/tmp/repo', options: { verbose: false, reviewer: 'claude' }, hasDepsOverride: false }]);
 });
 
 test('runCli passes reviewer=claude to pre-commit command', async () => {
@@ -147,6 +149,44 @@ test('runCli passes reviewer=claude to pre-commit command', async () => {
   const exitCode = await runCli(['pre-commit', '--claude'], deps);
   assert.equal(exitCode, 0);
   assert.deepEqual(calls.runPreCommit, [{ cwd: '/tmp/repo', options: { verbose: false, reviewer: 'claude' } }]);
+});
+
+test('runCli diff with base arg calls runReview with deps override', async () => {
+  const { deps, calls } = makeDeps();
+  const exitCode = await runCli(['diff', 'main'], deps);
+  assert.equal(exitCode, 0);
+  assert.equal(calls.runReview.length, 1);
+  assert.equal(calls.runReview[0].cwd, '/tmp/repo');
+  assert.equal(calls.runReview[0].hasDepsOverride, true);
+  assert.ok(calls.lastDepsOverride);
+  assert.equal(typeof calls.lastDepsOverride.getStagedDiff, 'function');
+  assert.equal(typeof calls.lastDepsOverride.buildPrompt, 'function');
+});
+
+test('runCli diff without base arg returns error', async () => {
+  const { deps, calls } = makeDeps();
+  const exitCode = await runCli(['diff'], deps);
+  assert.equal(exitCode, 1);
+  assert.ok(calls.logs.some((line) => line.includes('diff command requires a base branch')));
+  assert.equal(calls.runReview.length, 0);
+});
+
+test('runCli diff with base and head args passes both', async () => {
+  const { deps, calls } = makeDeps();
+  const exitCode = await runCli(['diff', 'main', 'feature-branch'], deps);
+  assert.equal(exitCode, 0);
+  assert.equal(calls.runReview.length, 1);
+  assert.equal(calls.runReview[0].hasDepsOverride, true);
+});
+
+test('runCli diff supports --verbose and reviewer flags', async () => {
+  const { deps, calls } = makeDeps();
+  const exitCode = await runCli(['diff', 'main', '--verbose', '--codex'], deps);
+  assert.equal(exitCode, 0);
+  assert.equal(calls.runReview.length, 1);
+  assert.equal(calls.runReview[0].options.verbose, true);
+  assert.equal(calls.runReview[0].options.reviewer, 'codex');
+  assert.equal(calls.runReview[0].hasDepsOverride, true);
 });
 
 test('runCli renders help for unknown command and exits with failure', async () => {

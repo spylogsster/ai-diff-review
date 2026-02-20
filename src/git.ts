@@ -7,6 +7,10 @@ export function git(args: string[], cwd = process.cwd()): string {
   return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
 }
 
+export function getDiffBetweenRefs(base: string, head: string, cwd = process.cwd()): string {
+  return git(['diff', '--no-color', `${base}...${head}`, '--'], cwd);
+}
+
 export function getGitPath(name: string): string {
   try {
     return git(['rev-parse', '--git-path', name]);

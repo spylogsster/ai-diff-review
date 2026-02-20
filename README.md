@@ -91,6 +91,10 @@ npx git-ai-review review --verbose
 npx git-ai-review review --codex
 npx git-ai-review review --copilot
 npx git-ai-review review --claude
+npx git-ai-review diff main
+npx git-ai-review diff main feature-branch
+npx git-ai-review diff main feature-branch --verbose
+npx git-ai-review diff main feature-branch --codex
 npx git-ai-review pre-commit
 npx git-ai-review pre-commit --verbose
 npx git-ai-review install
@@ -104,6 +108,9 @@ npm run git-ai-review -- review --verbose
 npm run git-ai-review -- review --codex
 npm run git-ai-review -- review --copilot
 npm run git-ai-review -- review --claude
+npm run git-ai-review -- diff main
+npm run git-ai-review -- diff main feature-branch
+npm run git-ai-review -- diff main feature-branch --verbose
 npm run git-ai-review -- pre-commit
 npm run git-ai-review -- pre-commit --verbose
 npm run git-ai-review -- install
@@ -116,6 +123,7 @@ npm run git-ai-review -- install
 - `review --codex`: force Codex reviewer only (skip Copilot/Claude fallback).
 - `review --copilot`: force Copilot reviewer only (skip Codex/Claude).
 - `review --claude`: force Claude reviewer only (skip Codex/Copilot).
+- `diff <base> [head]`: run AI review for the diff between two branches/refs. Uses three-dot diff (`base...head`) to show changes introduced on `head` since it diverged from `base`. If `head` is omitted, defaults to `HEAD`. Supports the same `--verbose` and reviewer flags as `review`.
 - `pre-commit`: run lock-aware pre-commit flow (recommended for hooks).
 - `pre-commit --verbose`: same as pre-commit, but with detailed prompt/raw model logs.
 - `install`: install hook script and set `core.hooksPath`.
