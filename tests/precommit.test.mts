@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { runPreCommit } from '../src/precommit.ts';
 
-test('runPreCommit forwards verbose=true to runReview', () => {
+test('runPreCommit forwards verbose=true to runReview', async () => {
   const cwd = mkdtempSync(join(tmpdir(), 'ai-review-precommit-test-'));
   mkdirSync(join(cwd, '.git'), { recursive: true });
 
@@ -17,11 +17,11 @@ test('runPreCommit forwards verbose=true to runReview', () => {
 
   let capturedVerbose = false;
   try {
-    const code = runPreCommit(
+    const code = await runPreCommit(
       cwd,
       { verbose: true },
       {
-        runReviewFn: (_cwd, options) => {
+        runReviewFn: async (_cwd, options) => {
           capturedVerbose = options?.verbose === true;
           return { pass: true, reportPath: join(cwd, '.git', 'ai-review-last.json'), reason: 'ok' };
         },

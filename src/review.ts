@@ -4,7 +4,7 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { platform, tmpdir } from 'node:os';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { REVIEW_SCHEMA } from './schema.js';
 import type { ParsedReview, ReviewReport, ReviewRunnerResult } from './types.js';
@@ -12,19 +12,20 @@ import { buildAgentsContext, resolvePromptHeaderLines } from './prompt.js';
 import { getGitPath, git } from './git.js';
 
 const COPILOT_MODEL = process.env.COPILOT_REVIEW_MODEL || 'gpt-5.3-codex';
-const TIMEOUT_MS = Number(process.env.AI_REVIEW_TIMEOUT_MS || 180000);
+const TIMEOUT_MS = Number(process.env.AI_REVIEW_TIMEOUT_MS || 300000);
 const PREFLIGHT_TIMEOUT_SEC = Number(process.env.AI_REVIEW_PREFLIGHT_TIMEOUT_SEC || 8);
 
 export interface RunReviewOptions {
   verbose?: boolean;
-  reviewer?: 'codex' | 'copilot';
+  reviewer?: 'claude' | 'codex' | 'copilot';
 }
 
 export interface RunReviewDeps {
   getStagedDiff: () => string;
   buildPrompt: (diff: string, cwd: string) => string;
-  runCodex: (prompt: string, verbose: boolean) => ReviewRunnerResult;
-  runCopilot: (prompt: string, verbose: boolean) => ReviewRunnerResult;
+  runClaude: (prompt: string, verbose: boolean) => Promise<ReviewRunnerResult>;
+  runCodex: (prompt: string, verbose: boolean) => Promise<ReviewRunnerResult>;
+  runCopilot: (prompt: string, verbose: boolean) => Promise<ReviewRunnerResult>;
   writeReport: (reportPath: string, report: ReviewReport) => void;
   log: (message: string) => void;
 }
@@ -175,20 +176,7 @@ function buildPrompt(diff: string, cwd = process.cwd()): string {
   ].join('\n');
 }
 
-export function parseSubagentOutput(raw: string): ParsedReview {
-  const trimmed = String(raw || '').trim();
-  if (!trimmed) {
-    throw new Error('Subagent returned an empty response.');
-  }
-
-  let cleaned = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
-  const jsonStart = cleaned.indexOf('{');
-  const jsonEnd = cleaned.lastIndexOf('}');
-  if (jsonStart !== -1 && jsonEnd > jsonStart) {
-    cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
-  }
-
-  const parsed = JSON.parse(cleaned);
+function validateParsedReview(parsed: unknown): ParsedReview {
   if (!parsed || typeof parsed !== 'object') {
     throw new Error('Subagent output is not a JSON object.');
   }
@@ -198,8 +186,162 @@ export function parseSubagentOutput(raw: string): ParsedReview {
   if (!Array.isArray((parsed as ParsedReview).findings)) {
     throw new Error('Subagent output has an invalid findings list.');
   }
-
   return parsed as ParsedReview;
+}
+
+export function parseSubagentOutput(raw: string): ParsedReview {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) {
+    throw new Error('Subagent returned an empty response.');
+  }
+
+  let cleaned = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+
+  // Try direct parse first (handles clean JSON without extraction)
+  try {
+    return validateParsedReview(JSON.parse(cleaned));
+  } catch {
+    // not valid or not a review — try extraction
+  }
+
+  // Extract JSON object from surrounding text
+  const jsonStart = cleaned.indexOf('{');
+  const jsonEnd = cleaned.lastIndexOf('}');
+  if (jsonStart !== -1 && jsonEnd > jsonStart) {
+    cleaned = cleaned.slice(jsonStart, jsonEnd + 1);
+  }
+
+  return validateParsedReview(JSON.parse(cleaned));
+}
+
+function spawnClaudeDetached(
+  bin: string,
+  args: string[],
+  prompt: string,
+  env: Record<string, string>,
+  cwd: string,
+  timeoutMs: number,
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(bin, args, {
+      cwd,
+      env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      detached: true,
+      windowsHide: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        try {
+          if (process.platform !== 'win32' && child.pid) {
+            process.kill(-child.pid, 'SIGTERM');
+          } else {
+            child.kill();
+          }
+        } catch { /* ignore */ }
+        reject(new Error(`spawn ${bin} ETIMEDOUT`));
+      }
+    }, timeoutMs);
+
+    child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+    child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+    child.on('error', (err) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      }
+    });
+
+    child.on('close', (code) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        resolve({ stdout, stderr, exitCode: code ?? 1 });
+      }
+    });
+
+    child.stdin.on('error', () => { /* EPIPE if child exits before consuming stdin */ });
+    child.stdin.write(prompt);
+    child.stdin.end();
+  });
+}
+
+async function runClaude(prompt: string, verbose: boolean): Promise<ReviewRunnerResult> {
+  const claude = resolveBinary('CLAUDE_BIN', ['claude']);
+  if (!claude) {
+    console.error('Claude: binary not found in PATH (or CLAUDE_BIN not set) — skipping.');
+    return { available: false };
+  }
+
+  if (!canReach('https://api.anthropic.com')) {
+    console.error('Claude: network preflight failed (api.anthropic.com) — skipping.');
+    return { available: false };
+  }
+
+  try {
+    const claudeArgs = [
+      '--print',
+      '--output-format', 'json',
+      '--no-session-persistence',
+      '--max-turns', '1',
+      '--allowedTools', '',
+    ];
+
+    if (verbose) {
+      console.log(claude, claudeArgs.join(' '), '< <prompt via stdin>');
+    }
+
+    const cleanEnv: Record<string, string> = {};
+    for (const [key, val] of Object.entries(process.env)) {
+      if (val !== undefined && !(key.toUpperCase().startsWith('CLAUDE') && key.toUpperCase() !== 'CLAUDE_BIN')) {
+        cleanEnv[key] = val;
+      }
+    }
+
+    const { stdout, stderr, exitCode } = await spawnClaudeDetached(
+      claude, claudeArgs, prompt, cleanEnv, process.cwd(), TIMEOUT_MS,
+    );
+
+    if (verbose) {
+      logVerboseRunnerOutput({ model: 'Claude', stdout, stderr });
+    }
+
+    if (exitCode !== 0) {
+      const err = stderr.trim() || stdout.trim();
+      console.error(`Claude: execution failed${err ? `: ${err}` : ''} — skipping.`);
+      return { available: false };
+    }
+
+    const trimmed = stdout.trim();
+    if (!trimmed) {
+      console.error('Claude: empty response — skipping.');
+      return { available: false };
+    }
+
+    let reviewPayload = trimmed;
+    try {
+      const envelope = JSON.parse(trimmed);
+      if (envelope && typeof envelope === 'object' && typeof envelope.result === 'string') {
+        reviewPayload = envelope.result;
+      }
+    } catch {
+      // not an envelope — use raw output
+    }
+
+    return { available: true, result: parseSubagentOutput(reviewPayload) };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`Claude: ${message} — skipping.`);
+    return { available: false };
+  }
 }
 
 function runCodex(prompt: string, verbose: boolean): ReviewRunnerResult {
@@ -324,28 +466,33 @@ function runCopilot(prompt: string, verbose: boolean): ReviewRunnerResult {
   }
 }
 
-export function evaluateResults(codex: ReviewRunnerResult, copilot: ReviewRunnerResult): { pass: boolean; reason: string } {
-  if (!codex.available && !copilot.available) {
-    return { pass: false, reason: 'Both Codex and Copilot are unavailable. At least one AI review is required.' };
+export function evaluateResults(claude: ReviewRunnerResult, codex: ReviewRunnerResult, copilot: ReviewRunnerResult): { pass: boolean; reason: string } {
+  if (!claude.available && !codex.available && !copilot.available) {
+    return { pass: false, reason: 'All reviewers (Claude, Codex, Copilot) are unavailable. At least one AI review is required.' };
   }
 
+  const runners: Array<[string, ReviewRunnerResult]> = [['Claude', claude], ['Codex', codex], ['Copilot', copilot]];
+
   const failures: string[] = [];
-  if (codex.available && codex.result.status === 'fail') failures.push('Codex');
-  if (copilot.available && copilot.result.status === 'fail') failures.push('Copilot');
+  for (const [name, runner] of runners) {
+    if (runner.available && runner.result.status === 'fail') failures.push(name);
+  }
   if (failures.length > 0) {
     return { pass: false, reason: `AI review rejected by: ${failures.join(', ')}.` };
   }
 
   const withFindings: string[] = [];
-  if (codex.available && codex.result.findings.length > 0) withFindings.push('Codex');
-  if (copilot.available && copilot.result.findings.length > 0) withFindings.push('Copilot');
+  for (const [name, runner] of runners) {
+    if (runner.available && runner.result.findings.length > 0) withFindings.push(name);
+  }
   if (withFindings.length > 0) {
     return { pass: false, reason: `AI review has unresolved findings from: ${withFindings.join(', ')}. Pass requires zero findings.` };
   }
 
   const passed: string[] = [];
-  if (codex.available) passed.push('Codex');
-  if (copilot.available) passed.push('Copilot');
+  for (const [name, runner] of runners) {
+    if (runner.available) passed.push(name);
+  }
   return { pass: true, reason: `AI review approved by: ${passed.join(', ')}.` };
 }
 
@@ -366,18 +513,19 @@ function printReview(model: string, result: ParsedReview): void {
   }
 }
 
-export function runReview(
+export async function runReview(
   cwd = process.cwd(),
   options: RunReviewOptions = {},
   deps: Partial<RunReviewDeps> = {},
-): { pass: boolean; reportPath: string; reason: string } {
+): Promise<{ pass: boolean; reportPath: string; reason: string }> {
   const verbose = options.verbose === true;
   const reviewer = options.reviewer;
   const runtimeDeps: RunReviewDeps = {
     getStagedDiff,
     buildPrompt,
-    runCodex,
-    runCopilot,
+    runClaude,
+    runCodex: (p, v) => Promise.resolve(runCodex(p, v)),
+    runCopilot: (p, v) => Promise.resolve(runCopilot(p, v)),
     writeReport: (reportPath, report) => {
       writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf8');
     },
@@ -399,25 +547,34 @@ export function runReview(
     runtimeDeps.log('----- END REVIEW PROMPT -----');
   }
 
+  let claude: ReviewRunnerResult = { available: false };
   let codex: ReviewRunnerResult = { available: false };
   let copilot: ReviewRunnerResult = { available: false };
 
-  if (reviewer === 'copilot') {
+  if (reviewer === 'claude') {
+    runtimeDeps.log('Running Claude review (--claude)...');
+    claude = await runtimeDeps.runClaude(prompt, verbose);
+  } else if (reviewer === 'copilot') {
     runtimeDeps.log('Running Copilot review (--copilot)...');
-    copilot = runtimeDeps.runCopilot(prompt, verbose);
+    copilot = await runtimeDeps.runCopilot(prompt, verbose);
   } else if (reviewer === 'codex') {
     runtimeDeps.log('Running Codex review (--codex)...');
-    codex = runtimeDeps.runCodex(prompt, verbose);
+    codex = await runtimeDeps.runCodex(prompt, verbose);
   } else {
-    runtimeDeps.log('Running Codex review...');
-    codex = runtimeDeps.runCodex(prompt, verbose);
-    if (!codex.available) {
-      runtimeDeps.log('Codex unavailable — falling back to Copilot review...');
-      copilot = runtimeDeps.runCopilot(prompt, verbose);
+    runtimeDeps.log('Running Claude review...');
+    claude = await runtimeDeps.runClaude(prompt, verbose);
+    if (!claude.available) {
+      runtimeDeps.log('Claude unavailable — falling back to Codex review...');
+      codex = await runtimeDeps.runCodex(prompt, verbose);
+      if (!codex.available) {
+        runtimeDeps.log('Codex unavailable — falling back to Copilot review...');
+        copilot = await runtimeDeps.runCopilot(prompt, verbose);
+      }
     }
   }
 
   const report: ReviewReport = {
+    claude: claude.available ? claude.result : { status: 'unavailable' },
     codex: codex.available ? codex.result : { status: 'unavailable' },
     copilot: copilot.available ? copilot.result : { status: 'unavailable' },
   };
@@ -426,6 +583,11 @@ export function runReview(
   runtimeDeps.writeReport(reportPath, report);
   runtimeDeps.log(`AI review raw report saved: ${reportPath}`);
 
+  if (claude.available) {
+    printReview('Claude', claude.result);
+  } else {
+    console.log('\nClaude: unavailable — skipped.');
+  }
   if (codex.available) {
     printReview('Codex', codex.result);
   } else {
@@ -437,12 +599,16 @@ export function runReview(
     console.log('\nCopilot: unavailable — skipped.');
   }
 
-  const verdict = evaluateResults(codex, copilot);
+  const verdict = evaluateResults(claude, codex, copilot);
   console.log(`\n${verdict.reason}`);
   return { pass: verdict.pass, reportPath, reason: verdict.reason };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const result = runReview();
-  if (!result.pass) process.exit(1);
+  runReview().then((result) => {
+    if (!result.pass) process.exit(1);
+  }).catch((err) => {
+    console.error(err instanceof Error ? err.message : String(err));
+    process.exit(1);
+  });
 }

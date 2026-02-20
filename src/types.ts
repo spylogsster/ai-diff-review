@@ -20,6 +20,7 @@ export type ReviewRunnerResult =
   | { available: true; result: ParsedReview };
 
 export interface ReviewReport {
+  claude: ParsedReview | { status: 'unavailable' };
   codex: ParsedReview | { status: 'unavailable' };
   copilot: ParsedReview | { status: 'unavailable' };
 }
