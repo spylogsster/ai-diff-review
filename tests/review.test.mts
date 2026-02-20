@@ -444,6 +444,40 @@ test('runReview without reviewer uses default Codex-first fallback chain', async
   assert.equal(result.pass, true);
 });
 
+test('runReview default chain stops at Copilot when Codex unavailable', async () => {
+  let claudeCalled = false;
+  let codexCalled = false;
+  let copilotCalled = false;
+
+  const result = await runReview(
+    '/tmp/repo',
+    {},
+    {
+      getStagedDiff: () => 'diff --cached',
+      buildPrompt: () => 'PROMPT',
+      runClaude: () => {
+        claudeCalled = true;
+        return Promise.resolve({ available: true, result: PASS_RESULT });
+      },
+      runCodex: () => {
+        codexCalled = true;
+        return Promise.resolve({ available: false });
+      },
+      runCopilot: () => {
+        copilotCalled = true;
+        return Promise.resolve({ available: true, result: PASS_RESULT });
+      },
+      writeReport: () => {},
+      log: () => {},
+    },
+  );
+
+  assert.equal(codexCalled, true);
+  assert.equal(copilotCalled, true);
+  assert.equal(claudeCalled, false);
+  assert.equal(result.pass, true);
+});
+
 test('runReview default chain stops at Codex when available', async () => {
   let claudeCalled = false;
   let codexCalled = false;
