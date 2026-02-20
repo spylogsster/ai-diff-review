@@ -141,11 +141,13 @@ test('needsShellForBinary returns false for binaries without extension', () => {
   assert.equal(needsShellForBinary('codex', 'linux'), false);
 });
 
-test('resolveCommandFromPath resolves a known command on the current platform', () => {
-  const result = resolveCommandFromPath('node');
-  assert.ok(result !== null, 'Expected "node" to be found via PATH');
+test('resolveCommandFromPath resolves a known system command on the current platform', () => {
+  // Use 'ls' on Unix, 'cmd' on Windows — always available in PATH regardless of shell profile
+  const cmd = process.platform === 'win32' ? 'cmd' : 'ls';
+  const result = resolveCommandFromPath(cmd);
+  assert.ok(result !== null, `Expected "${cmd}" to be found via PATH`);
   if (process.platform === 'win32') {
-    assert.ok(/\.(exe|cmd)$/i.test(result), `Expected .exe or .cmd path on Windows, got: ${result}`);
+    assert.ok(/\.(exe|cmd|bat)$/i.test(result), `Expected .exe/.cmd/.bat path on Windows, got: ${result}`);
   } else {
     assert.ok(result.startsWith('/'), `Expected absolute path on Unix, got: ${result}`);
   }
