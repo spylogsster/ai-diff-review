@@ -1,5 +1,5 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
-# ai-diff-review
+# git-ai-review
 
 Review your git diff with your locally installed **Codex CLI** or **Copilot CLI** — run it manually in one command or automatically as a git pre-commit hook.
 
@@ -9,7 +9,7 @@ This package is licensed under **MPL-2.0**.
 
 ## What it does
 
-`ai-diff-review` uses your local Codex CLI and Copilot CLI installations to AI-review staged changes before they are committed. You can run it on demand with a single command (`npx ai-diff-review review`) or install it as a git hook so every commit is reviewed automatically.
+`git-ai-review` uses your local Codex CLI and Copilot CLI installations to AI-review staged changes before they are committed. You can run it on demand with a single command (`npx git-ai-review review`) or install it as a git hook so every commit is reviewed automatically.
 
 - Uses your local **Codex CLI** as the primary reviewer.
 - Falls back to your local **Copilot CLI** when Codex is unavailable.
@@ -36,13 +36,13 @@ If Codex is unavailable, fallback to Copilot is used. If both are unavailable, r
 ## Install in another repository
 
 ```bash
-npm i -D ai-diff-review
+npm i -D git-ai-review
 ```
 
 Install hook files and configure Git:
 
 ```bash
-npx ai-diff-review install
+npx git-ai-review install
 ```
 
 This creates/updates `.githooks/pre-commit` and sets:
@@ -56,28 +56,28 @@ git config core.hooksPath .githooks
 Via `npx`:
 
 ```bash
-npx ai-diff-review review
-npx ai-diff-review review --verbose
-npx ai-diff-review review --codex
-npx ai-diff-review review --copilot
-npx ai-diff-review pre-commit
-npx ai-diff-review pre-commit --verbose
-npx ai-diff-review install
+npx git-ai-review review
+npx git-ai-review review --verbose
+npx git-ai-review review --codex
+npx git-ai-review review --copilot
+npx git-ai-review pre-commit
+npx git-ai-review pre-commit --verbose
+npx git-ai-review install
 ```
 
 Via npm scripts (pass flags after `--`):
 
 ```bash
-npm run ai-diff-review -- review
-npm run ai-diff-review -- review --verbose
-npm run ai-diff-review -- review --codex
-npm run ai-diff-review -- review --copilot
-npm run ai-diff-review -- pre-commit
-npm run ai-diff-review -- pre-commit --verbose
-npm run ai-diff-review -- install
+npm run git-ai-review -- review
+npm run git-ai-review -- review --verbose
+npm run git-ai-review -- review --codex
+npm run git-ai-review -- review --copilot
+npm run git-ai-review -- pre-commit
+npm run git-ai-review -- pre-commit --verbose
+npm run git-ai-review -- install
 ```
 
-`npm run ai-review` is an alias for `npm run ai-diff-review` — both accept the same commands and flags.
+`npm run ai-review` is an alias for `npm run git-ai-review` — both accept the same commands and flags.
 
 - `review`: run AI review against staged diff.
 - `review --verbose`: print full prompt plus raw Codex/Copilot outputs to stdout.
@@ -132,8 +132,8 @@ This is useful for debugging prompt behavior and model integration issues.
 ## Example setup in a target repo
 
 ```bash
-npm i -D ai-diff-review
-npx ai-diff-review install
+npm i -D git-ai-review
+npx git-ai-review install
 ```
 
 Then commit as usual:

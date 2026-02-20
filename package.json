@@ -1,11 +1,11 @@
 {
-  "name": "ai-diff-review",
-  "version": "1.0.1",
+  "name": "git-ai-review",
+  "version": "2.0.0",
   "description": "Review your git diff with local Codex CLI or Copilot CLI — run manually in one command or automatically as a git hook",
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
-    "ai-diff-review": "dist/bin/ai-diff-review.js"
+    "git-ai-review": "dist/bin/git-ai-review.js"
   },
   "files": [
     "dist",
@@ -20,8 +20,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node scripts/run-tests.mjs",
     "prepare": "npm run build",
-    "ai-review": "node dist/bin/ai-diff-review.js",
-    "ai-diff-review": "node dist/bin/ai-diff-review.js"
+    "ai-review": "node dist/bin/git-ai-review.js",
+    "git-ai-review": "node dist/bin/git-ai-review.js"
   },
   "keywords": [
     "git-hooks",
