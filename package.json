@@ -18,7 +18,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test tests/**/*.test.mts",
+    "test": "node scripts/run-tests.mjs",
     "prepare": "npm run build"
   },
   "keywords": [
@@ -32,6 +32,7 @@
   "license": "MPL-2.0",
   "devDependencies": {
     "@types/node": "^22.13.1",
+    "glob": "^13.0.6",
     "tsx": "^4.20.6",
     "typescript": "^5.8.3"
   }

@@ -19,10 +19,6 @@ jobs:
 
       - run: npm run typecheck
 
-      - name: Run tests
-        shell: bash
-        run: |
-          shopt -s globstar
-          npm test
+      - run: npm test
 
       - run: npm run build
