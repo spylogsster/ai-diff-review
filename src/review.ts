@@ -214,7 +214,21 @@ export function parseSubagentOutput(raw: string): ParsedReview {
   return validateParsedReview(JSON.parse(cleaned));
 }
 
-function spawnClaudeDetached(
+export function buildSpawnOptions(
+  cwd: string,
+  env: Record<string, string>,
+  osPlatform = process.platform,
+): { cwd: string; env: Record<string, string>; stdio: ['pipe', 'pipe', 'pipe']; detached: boolean; windowsHide: boolean } {
+  return {
+    cwd,
+    env,
+    stdio: ['pipe', 'pipe', 'pipe'],
+    detached: osPlatform !== 'win32',
+    windowsHide: true,
+  };
+}
+
+function spawnClaude(
   bin: string,
   args: string[],
   prompt: string,
@@ -223,13 +237,7 @@ function spawnClaudeDetached(
   timeoutMs: number,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, {
-      cwd,
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      detached: true,
-      windowsHide: true,
-    });
+    const child = spawn(bin, args, buildSpawnOptions(cwd, env));
 
     let stdout = '';
     let stderr = '';
@@ -306,7 +314,7 @@ async function runClaude(prompt: string, verbose: boolean): Promise<ReviewRunner
       }
     }
 
-    const { stdout, stderr, exitCode } = await spawnClaudeDetached(
+    const { stdout, stderr, exitCode } = await spawnClaude(
       claude, claudeArgs, prompt, cleanEnv, process.cwd(), TIMEOUT_MS,
     );
 

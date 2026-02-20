@@ -11,6 +11,7 @@ import {
   resolveCommandFromPath,
   logVerboseRunnerOutput,
   needsShellForBinary,
+  buildSpawnOptions,
   runReview,
 } from '../src/review.ts';
 import {
@@ -192,6 +193,23 @@ test('needsShellForBinary returns false for .cmd/.bat files on non-win32', () =>
 test('needsShellForBinary returns false for binaries without extension', () => {
   assert.equal(needsShellForBinary('/usr/local/bin/codex', 'win32'), false);
   assert.equal(needsShellForBinary('codex', 'linux'), false);
+});
+
+test('buildSpawnOptions sets detached=false on win32', () => {
+  const opts = buildSpawnOptions('/tmp', {}, 'win32');
+  assert.equal(opts.detached, false);
+  assert.equal(opts.windowsHide, true);
+});
+
+test('buildSpawnOptions sets detached=true on linux', () => {
+  const opts = buildSpawnOptions('/tmp', {}, 'linux');
+  assert.equal(opts.detached, true);
+  assert.equal(opts.windowsHide, true);
+});
+
+test('buildSpawnOptions sets detached=true on darwin', () => {
+  const opts = buildSpawnOptions('/tmp', {}, 'darwin');
+  assert.equal(opts.detached, true);
 });
 
 test('resolveCommandFromPath resolves a known system command on the current platform', () => {
