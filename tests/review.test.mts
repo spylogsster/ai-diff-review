@@ -10,6 +10,7 @@ import {
   resolveCodexMacAppBinary,
   resolveCommandFromPath,
   logVerboseRunnerOutput,
+  needsShellForBinary,
   runReview,
 } from '../src/review.ts';
 import {
@@ -117,6 +118,41 @@ test('resolveCodexMacAppBinary returns bundle executable on macOS when app exist
 
   const resolved = resolveCodexMacAppBinary('darwin', (path) => existing.has(path));
   assert.equal(resolved, '/Applications/Codex.app/Contents/Resources/codex');
+});
+
+test('needsShellForBinary returns true for .cmd and .bat files on win32', () => {
+  assert.equal(needsShellForBinary('C:\\nvm4w\\nodejs\\codex.cmd', 'win32'), true);
+  assert.equal(needsShellForBinary('codex.CMD', 'win32'), true);
+  assert.equal(needsShellForBinary('C:\\tools\\codex.bat', 'win32'), true);
+  assert.equal(needsShellForBinary('codex.BAT', 'win32'), true);
+});
+
+test('needsShellForBinary returns false for .exe files on win32', () => {
+  assert.equal(needsShellForBinary('C:\\nvm4w\\nodejs\\node.exe', 'win32'), false);
+});
+
+test('needsShellForBinary returns false for .cmd/.bat files on non-win32', () => {
+  assert.equal(needsShellForBinary('codex.cmd', 'darwin'), false);
+  assert.equal(needsShellForBinary('codex.bat', 'linux'), false);
+});
+
+test('needsShellForBinary returns false for binaries without extension', () => {
+  assert.equal(needsShellForBinary('/usr/local/bin/codex', 'win32'), false);
+  assert.equal(needsShellForBinary('codex', 'linux'), false);
+});
+
+test('resolveCommandFromPath resolves a known command on the current platform', () => {
+  const result = resolveCommandFromPath('node');
+  assert.ok(result !== null, 'Expected "node" to be found via PATH');
+  if (process.platform === 'win32') {
+    assert.ok(/\.(exe|cmd)$/i.test(result), `Expected .exe or .cmd path on Windows, got: ${result}`);
+  } else {
+    assert.ok(result.startsWith('/'), `Expected absolute path on Unix, got: ${result}`);
+  }
+});
+
+test('resolveCommandFromPath returns null for nonexistent command', () => {
+  assert.equal(resolveCommandFromPath('nonexistent-cmd-xyz-9999'), null);
 });
 
 test('resolveCommandFromPath rejects candidates with shell metacharacters', () => {
