@@ -4,7 +4,11 @@
  */
 import { runCli } from '../cli.js';
 
-const code = runCli(process.argv.slice(2));
-if (code !== 0) {
-  process.exit(code);
-}
+runCli(process.argv.slice(2)).then((code) => {
+  if (code !== 0) {
+    process.exit(code);
+  }
+}).catch((err) => {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+});
