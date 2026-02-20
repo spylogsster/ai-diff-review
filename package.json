@@ -1,7 +1,7 @@
 {
   "name": "git-ai-review",
-  "version": "2.0.3",
-  "description": "Review your git diff with local Codex CLI or Copilot CLI — run manually in one command or automatically as a git hook",
+  "version": "2.1.0",
+  "description": "Review your git diff with local Codex CLI, Copilot CLI, or Claude CLI — run manually in one command or automatically as a git hook",
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
@@ -28,7 +28,8 @@
     "pre-commit",
     "ai",
     "codex",
-    "copilot"
+    "copilot",
+    "claude"
   ],
   "author": "Sergei Poletaev <spylogsster@gmail.com>",
   "license": "MPL-2.0",

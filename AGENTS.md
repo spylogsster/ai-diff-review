@@ -20,6 +20,8 @@ All contributors and AI agents must follow these rules.
   - pre-commit lock flow in `src/precommit.ts`
   - hook installer in `src/install.ts`
   - prompt/context building in `src/prompt.ts`
+  - git utilities in `src/git.ts`
+  - review JSON schema in `src/schema.ts`
   - shared types in `src/types.ts`
 - Do not collapse domains into a single large file.
 - Export testable pure functions for parsing, policy extraction, and verdict logic.

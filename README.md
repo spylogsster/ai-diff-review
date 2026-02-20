@@ -36,7 +36,7 @@ This package is licensed under **MPL-2.0**.
 
 ## What it does
 
-`git-ai-review` uses your locally installed AI CLIs to review staged changes before they are committed. You can run it on demand with a single command (`npx git-ai-review review`) or install it as a git hook so every commit is reviewed automatically.
+`git-ai-review` uses your locally installed AI CLIs to review staged changes before they are committed. You can run it on demand with a single command (`npx git-ai-review review`), review the diff between two branches (`npx git-ai-review diff main feature-branch`), or install it as a git hook so every commit is reviewed automatically.
 
 - Uses your local **Codex CLI** as the primary reviewer.
 - Falls back to **Copilot CLI**, then **Claude CLI** when the previous reviewer is unavailable.
