@@ -8,11 +8,11 @@ import { spawnSync } from 'node:child_process';
 const HOOK_CONTENT = `#!/bin/sh
 set -e
 
-if npx --no-install ai-diff-review pre-commit; then
+if npx --no-install git-ai-review pre-commit; then
   exit 0
 fi
 
-npx ai-diff-review pre-commit
+npx git-ai-review pre-commit
 `;
 
 function setHooksPath(hooksPath: string): void {
