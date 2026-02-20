@@ -26,6 +26,13 @@ npx git-ai-review review --copilot
 npx git-ai-review review --claude
 ```
 
+Or review the diff between two branches:
+
+```bash
+npx git-ai-review diff main
+npx git-ai-review diff main feature-branch
+```
+
 Requirements for the target repo:
 - An `AGENTS.md` file must exist in the repo root (it's used as policy context for the review)
 - At least one reviewer CLI must be installed and authenticated: **Codex CLI** (`codex login`), **Copilot CLI** (`copilot auth`), or **Claude CLI** (`claude`)
