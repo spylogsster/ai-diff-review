@@ -30,7 +30,7 @@
     "codex",
     "copilot"
   ],
-  "author": "",
+  "author": "Sergei Poletaev <spylogsster@gmail.com>",
   "license": "MPL-2.0",
   "devDependencies": {
     "@types/node": "^22.13.1",
