@@ -70,6 +70,26 @@ function canReach(url: string): boolean {
   }
 }
 
+export function hasApiToken(envVarName: string, env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env[envVarName]?.trim());
+}
+
+export function checkPreflight(
+  name: string,
+  tokenEnvVar: string,
+  urls: string[],
+  verbose: boolean,
+  reach: (url: string) => boolean = canReach,
+): boolean {
+  if (hasApiToken(tokenEnvVar)) {
+    if (verbose) console.log(`${name}: using API token (${tokenEnvVar}) — skipping network preflight.`);
+    return true;
+  }
+  if (urls.some(reach)) return true;
+  console.error(`${name}: network preflight failed — skipping.`);
+  return false;
+}
+
 export function resolveCommandFromPath(candidate: string): string | null {
   if (!/^[a-zA-Z0-9_./-]+$/.test(candidate)) {
     return null;
@@ -289,8 +309,7 @@ async function runClaude(prompt: string, verbose: boolean): Promise<ReviewRunner
     return { available: false };
   }
 
-  if (!canReach('https://api.anthropic.com')) {
-    console.error('Claude: network preflight failed (api.anthropic.com) — skipping.');
+  if (!checkPreflight('Claude', 'ANTHROPIC_API_KEY', ['https://api.anthropic.com'], verbose)) {
     return { available: false };
   }
 
@@ -359,8 +378,7 @@ function runCodex(prompt: string, verbose: boolean): ReviewRunnerResult {
     return { available: false };
   }
 
-  if (!canReach('https://api.openai.com/v1/models') && !canReach('https://chatgpt.com')) {
-    console.error('Codex: network preflight failed — skipping.');
+  if (!checkPreflight('Codex', 'OPENAI_API_KEY', ['https://api.openai.com/v1/models', 'https://chatgpt.com'], verbose)) {
     return { available: false };
   }
 
@@ -428,8 +446,7 @@ function runCopilot(prompt: string, verbose: boolean): ReviewRunnerResult {
     return { available: false };
   }
 
-  if (!canReach('https://api.github.com')) {
-    console.error('Copilot: network preflight failed (api.github.com) — skipping.');
+  if (!checkPreflight('Copilot', 'GITHUB_TOKEN', ['https://api.github.com'], verbose)) {
     return { available: false };
   }
 

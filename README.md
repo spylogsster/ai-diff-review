@@ -55,9 +55,11 @@ This package is licensed under **MPL-2.0**.
 At least one reviewer CLI must be installed and authenticated on each developer machine.
 Recommended: install multiple for resilient fallback behavior.
 
-- Codex CLI (`codex`) with active login (`codex login`) — primary reviewer
-- Copilot CLI (`copilot`) with active login (`copilot auth`)
-- Claude CLI (`claude`)
+- Codex CLI (`codex`) with active login (`codex login`) or `OPENAI_API_KEY` env var — primary reviewer
+- Copilot CLI (`copilot`) with active login (`copilot auth`) or `GITHUB_TOKEN` env var
+- Claude CLI (`claude`) with `ANTHROPIC_API_KEY` env var or OAuth login
+
+When an API token env var is set, the network preflight check for that reviewer is skipped — this is useful in CI environments or when interactive OAuth login is not available.
 
 Default fallback chain: Codex → Copilot → Claude. If all are unavailable, review fails.
 
@@ -138,6 +140,9 @@ In each target repository:
 
 ## Environment variables
 
+- `ANTHROPIC_API_KEY`: Anthropic API token for Claude — skips network preflight when set.
+- `OPENAI_API_KEY`: OpenAI API token for Codex — skips network preflight when set.
+- `GITHUB_TOKEN`: GitHub token for Copilot — skips network preflight when set.
 - `CODEX_BIN`: custom Codex executable path/name.
 - `COPILOT_BIN`: custom Copilot executable path/name.
 - `CLAUDE_BIN`: custom Claude executable path/name.

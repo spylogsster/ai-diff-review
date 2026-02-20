@@ -13,6 +13,8 @@ import {
   needsShellForBinary,
   buildSpawnOptions,
   runReview,
+  hasApiToken,
+  checkPreflight,
 } from '../src/review.ts';
 import {
   extractReferencedMarkdownFiles,
@@ -556,4 +558,99 @@ test('logVerboseRunnerOutput omits response file section when not provided', () 
   assert.ok(lines.some((l) => l.includes('COPILOT STDOUT (RAW)')));
   assert.ok(!lines.some((l) => l.includes('RESPONSE FILE')));
   assert.ok(lines.some((l) => l.includes('END COPILOT RAW OUTPUT')));
+});
+
+test('hasApiToken returns true when env var is set', () => {
+  assert.equal(hasApiToken('ANTHROPIC_API_KEY', { ANTHROPIC_API_KEY: 'sk-ant-123' } as NodeJS.ProcessEnv), true);
+});
+
+test('hasApiToken returns false when env var is not set', () => {
+  assert.equal(hasApiToken('ANTHROPIC_API_KEY', {} as NodeJS.ProcessEnv), false);
+});
+
+test('hasApiToken returns false for empty string', () => {
+  assert.equal(hasApiToken('OPENAI_API_KEY', { OPENAI_API_KEY: '' } as NodeJS.ProcessEnv), false);
+});
+
+test('hasApiToken returns false for whitespace-only value', () => {
+  assert.equal(hasApiToken('GITHUB_TOKEN', { GITHUB_TOKEN: '   ' } as NodeJS.ProcessEnv), false);
+});
+
+test('hasApiToken detects OPENAI_API_KEY', () => {
+  assert.equal(hasApiToken('OPENAI_API_KEY', { OPENAI_API_KEY: 'sk-openai-xyz' } as NodeJS.ProcessEnv), true);
+});
+
+test('hasApiToken detects GITHUB_TOKEN', () => {
+  assert.equal(hasApiToken('GITHUB_TOKEN', { GITHUB_TOKEN: 'ghp_abc123' } as NodeJS.ProcessEnv), true);
+});
+
+test('checkPreflight returns true when API token is set (skips network)', () => {
+  const saved = process.env.ANTHROPIC_API_KEY;
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+  try {
+    const reachCalled: string[] = [];
+    const result = checkPreflight('Claude', 'ANTHROPIC_API_KEY', ['https://api.anthropic.com'], false, (url) => {
+      reachCalled.push(url);
+      return false;
+    });
+    assert.equal(result, true);
+    assert.equal(reachCalled.length, 0, 'canReach should not be called when token is set');
+  } finally {
+    if (saved === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = saved;
+  }
+});
+
+test('checkPreflight falls back to canReach when no token is set', () => {
+  const saved = process.env.OPENAI_API_KEY;
+  delete process.env.OPENAI_API_KEY;
+  try {
+    const reachCalled: string[] = [];
+    const result = checkPreflight('Codex', 'OPENAI_API_KEY', ['https://api.openai.com/v1/models', 'https://chatgpt.com'], false, (url) => {
+      reachCalled.push(url);
+      return url === 'https://chatgpt.com';
+    });
+    assert.equal(result, true);
+    assert.ok(reachCalled.length > 0, 'canReach should be called when no token is set');
+  } finally {
+    if (saved === undefined) delete process.env.OPENAI_API_KEY;
+    else process.env.OPENAI_API_KEY = saved;
+  }
+});
+
+test('checkPreflight returns false when no token and canReach fails', () => {
+  const saved = process.env.GITHUB_TOKEN;
+  delete process.env.GITHUB_TOKEN;
+  try {
+    const result = checkPreflight('Copilot', 'GITHUB_TOKEN', ['https://api.github.com'], false, () => false);
+    assert.equal(result, false);
+  } finally {
+    if (saved === undefined) delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN = saved;
+  }
+});
+
+test('checkPreflight logs token usage only in verbose mode', () => {
+  const saved = process.env.ANTHROPIC_API_KEY;
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+  const originalLog = console.log;
+  try {
+    // Non-verbose: console.log should NOT be called with token message
+    const nonVerboseLogs: string[] = [];
+    console.log = (...args: unknown[]) => { nonVerboseLogs.push(args.join(' ')); };
+    const result = checkPreflight('Claude', 'ANTHROPIC_API_KEY', ['https://api.anthropic.com'], false, () => false);
+    assert.equal(result, true);
+    assert.ok(!nonVerboseLogs.some((l) => l.includes('API token')), 'Should not log token message in non-verbose mode');
+
+    // Verbose: console.log SHOULD be called with token message
+    const verboseLogs: string[] = [];
+    console.log = (...args: unknown[]) => { verboseLogs.push(args.join(' ')); };
+    const resultVerbose = checkPreflight('Claude', 'ANTHROPIC_API_KEY', ['https://api.anthropic.com'], true, () => false);
+    assert.equal(resultVerbose, true);
+    assert.ok(verboseLogs.some((l) => l.includes('API token') && l.includes('ANTHROPIC_API_KEY')), 'Should log token message in verbose mode');
+  } finally {
+    console.log = originalLog;
+    if (saved === undefined) delete process.env.ANTHROPIC_API_KEY;
+    else process.env.ANTHROPIC_API_KEY = saved;
+  }
 });
