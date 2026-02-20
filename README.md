@@ -1,7 +1,7 @@
 <!-- SPDX-License-Identifier: MPL-2.0 -->
-# ai-review-hook
+# ai-diff-review
 
-`ai-review-hook` is a publishable npm package that adds an AI-powered Git pre-commit review flow.
+Review your git diff with your locally installed **Codex CLI** or **Copilot CLI** — run it manually in one command or automatically as a git pre-commit hook.
 
 ## License
 
@@ -9,8 +9,10 @@ This package is licensed under **MPL-2.0**.
 
 ## What it does
 
-- Uses **Codex** as the primary reviewer.
-- Uses **Copilot** as fallback when Codex is unavailable.
+`ai-diff-review` uses your local Codex CLI and Copilot CLI installations to AI-review staged changes before they are committed. You can run it on demand with a single command (`npx ai-diff-review review`) or install it as a git hook so every commit is reviewed automatically.
+
+- Uses your local **Codex CLI** as the primary reviewer.
+- Falls back to your local **Copilot CLI** when Codex is unavailable.
 - Blocks commit when:
   - any reviewer returns `status: fail`, or
   - any findings are returned (even with `status: pass`), or
@@ -34,13 +36,13 @@ If Codex is unavailable, fallback to Copilot is used. If both are unavailable, r
 ## Install in another repository
 
 ```bash
-npm i -D ai-review-hook
+npm i -D ai-diff-review
 ```
 
 Install hook files and configure Git:
 
 ```bash
-npx ai-review-hook install
+npx ai-diff-review install
 ```
 
 This creates/updates `.githooks/pre-commit` and sets:
@@ -51,15 +53,31 @@ git config core.hooksPath .githooks
 
 ## Commands
 
+Via `npx`:
+
 ```bash
-npx ai-review-hook review
-npx ai-review-hook review --verbose
-npx ai-review-hook review --codex
-npx ai-review-hook review --copilot
-npx ai-review-hook pre-commit
-npx ai-review-hook pre-commit --verbose
-npx ai-review-hook install
+npx ai-diff-review review
+npx ai-diff-review review --verbose
+npx ai-diff-review review --codex
+npx ai-diff-review review --copilot
+npx ai-diff-review pre-commit
+npx ai-diff-review pre-commit --verbose
+npx ai-diff-review install
 ```
+
+Via npm scripts (pass flags after `--`):
+
+```bash
+npm run ai-diff-review -- review
+npm run ai-diff-review -- review --verbose
+npm run ai-diff-review -- review --codex
+npm run ai-diff-review -- review --copilot
+npm run ai-diff-review -- pre-commit
+npm run ai-diff-review -- pre-commit --verbose
+npm run ai-diff-review -- install
+```
+
+`npm run ai-review` is an alias for `npm run ai-diff-review` — both accept the same commands and flags.
 
 - `review`: run AI review against staged diff.
 - `review --verbose`: print full prompt plus raw Codex/Copilot outputs to stdout.
@@ -114,8 +132,8 @@ This is useful for debugging prompt behavior and model integration issues.
 ## Example setup in a target repo
 
 ```bash
-npm i -D ai-review-hook
-npx ai-review-hook install
+npm i -D ai-diff-review
+npx ai-diff-review install
 ```
 
 Then commit as usual:

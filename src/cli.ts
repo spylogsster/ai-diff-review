@@ -22,7 +22,7 @@ const DEFAULT_CLI_DEPS: CliDeps = {
 };
 
 function printHelp(log: (message: string) => void): void {
-  log('ai-review-hook <command> [options]');
+  log('ai-diff-review <command> [options]');
   log('');
   log('Commands:');
   log('  review      Run AI review for staged changes');

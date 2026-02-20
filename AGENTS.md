@@ -1,4 +1,4 @@
-# AGENTS.md — ai-review-hook
+# AGENTS.md — ai-diff-review
 
 This repository contains a publishable npm package for AI-powered Git review hooks.
 All contributors and AI agents must follow these rules.
@@ -7,7 +7,7 @@ All contributors and AI agents must follow these rules.
 
 ## Scope
 
-- This package owns the `ai-review-hook` CLI and related review/hook logic.
+- This package owns the `ai-diff-review` CLI and related review/hook logic.
 - The package must remain reusable across arbitrary repositories.
 - Avoid repo-specific assumptions except for explicit `AGENTS.md`-based policy loading.
 
@@ -66,7 +66,7 @@ All contributors and AI agents must follow these rules.
 ## Packaging Rules
 
 - Package must stay publishable to npm.
-- Keep `bin` entry working for `npx ai-review-hook ...`.
+- Keep `bin` entry working for `npx ai-diff-review ...`.
 - Keep `README.md` aligned with real behavior and options.
 - Keep semantic versioning discipline.
 

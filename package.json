@@ -1,11 +1,11 @@
 {
-  "name": "ai-review-hook",
-  "version": "0.1.0",
-  "description": "Git pre-commit AI review hook with Codex primary and Copilot fallback",
+  "name": "ai-diff-review",
+  "version": "1.0.1",
+  "description": "Review your git diff with local Codex CLI or Copilot CLI — run manually in one command or automatically as a git hook",
   "type": "module",
   "main": "dist/cli.js",
   "bin": {
-    "ai-review-hook": "dist/bin/ai-review-hook.js"
+    "ai-diff-review": "dist/bin/ai-diff-review.js"
   },
   "files": [
     "dist",
@@ -19,7 +19,9 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node scripts/run-tests.mjs",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "ai-review": "node dist/bin/ai-diff-review.js",
+    "ai-diff-review": "node dist/bin/ai-diff-review.js"
   },
   "keywords": [
     "git-hooks",
