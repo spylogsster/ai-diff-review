@@ -54,6 +54,8 @@ git config core.hooksPath .githooks
 ```bash
 npx ai-review-hook review
 npx ai-review-hook review --verbose
+npx ai-review-hook review --codex
+npx ai-review-hook review --copilot
 npx ai-review-hook pre-commit
 npx ai-review-hook pre-commit --verbose
 npx ai-review-hook install
@@ -61,9 +63,13 @@ npx ai-review-hook install
 
 - `review`: run AI review against staged diff.
 - `review --verbose`: print full prompt plus raw Codex/Copilot outputs to stdout.
+- `review --codex`: force Codex reviewer only (skip Copilot fallback).
+- `review --copilot`: force Copilot reviewer only (skip Codex).
 - `pre-commit`: run lock-aware pre-commit flow (recommended for hooks).
 - `pre-commit --verbose`: same as pre-commit, but with detailed prompt/raw model logs.
 - `install`: install hook script and set `core.hooksPath`.
+
+The `--codex` and `--copilot` flags are mutually exclusive and can be combined with `--verbose`.
 
 ## Repository requirements
 

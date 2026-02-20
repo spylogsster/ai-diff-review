@@ -73,6 +73,12 @@ All contributors and AI agents must follow these rules.
 - Keep SPDX header in all comment-capable source/test files.
 - Do not add files that violate current license policy.
 
+## Git Rules
+
+- **`--no-verify` commits are strictly prohibited.** All commits must pass through the pre-commit hook with AI review. No exceptions.
+- **No auto-generated files** in the repository (esbuild bundles, .zip archives, etc.), **except lockfiles** (`package-lock.json` for root and function packages). Add generated artifacts to `.gitignore`.
+- **No binary files** in the repository, **except images** (.png, .jpg, .ico).
+
 ## Git and Release Rules
 
 - Use feature branches and PRs; avoid direct pushes to protected mainline branches.

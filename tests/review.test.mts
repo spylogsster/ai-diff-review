@@ -227,6 +227,90 @@ test('logVerboseRunnerOutput prints stdout, stderr, and response file', () => {
   assert.ok(lines.some((l) => l.includes('END CODEX RAW OUTPUT')));
 });
 
+test('runReview with reviewer=codex skips Copilot even when Codex is unavailable', () => {
+  let codexCalled = false;
+  let copilotCalled = false;
+
+  const result = runReview(
+    '/tmp/repo',
+    { reviewer: 'codex' },
+    {
+      getStagedDiff: () => 'diff --cached',
+      buildPrompt: () => 'PROMPT',
+      runCodex: () => {
+        codexCalled = true;
+        return { available: false };
+      },
+      runCopilot: () => {
+        copilotCalled = true;
+        return { available: false };
+      },
+      writeReport: () => {},
+      log: () => {},
+    },
+  );
+
+  assert.equal(codexCalled, true);
+  assert.equal(copilotCalled, false);
+  assert.equal(result.pass, false);
+});
+
+test('runReview with reviewer=copilot skips Codex', () => {
+  let codexCalled = false;
+  let copilotCalled = false;
+
+  const result = runReview(
+    '/tmp/repo',
+    { reviewer: 'copilot' },
+    {
+      getStagedDiff: () => 'diff --cached',
+      buildPrompt: () => 'PROMPT',
+      runCodex: () => {
+        codexCalled = true;
+        return { available: true, result: PASS_RESULT };
+      },
+      runCopilot: () => {
+        copilotCalled = true;
+        return { available: true, result: PASS_RESULT };
+      },
+      writeReport: () => {},
+      log: () => {},
+    },
+  );
+
+  assert.equal(codexCalled, false);
+  assert.equal(copilotCalled, true);
+  assert.equal(result.pass, true);
+});
+
+test('runReview without reviewer uses default Codex-first-then-Copilot-fallback', () => {
+  let codexCalled = false;
+  let copilotCalled = false;
+
+  const result = runReview(
+    '/tmp/repo',
+    {},
+    {
+      getStagedDiff: () => 'diff --cached',
+      buildPrompt: () => 'PROMPT',
+      runCodex: () => {
+        codexCalled = true;
+        return { available: false };
+      },
+      runCopilot: () => {
+        copilotCalled = true;
+        return { available: true, result: PASS_RESULT };
+      },
+      writeReport: () => {},
+      log: () => {},
+    },
+  );
+
+  assert.equal(codexCalled, true);
+  assert.equal(copilotCalled, true);
+  assert.equal(result.pass, true);
+});
+
 test('logVerboseRunnerOutput omits response file section when not provided', () => {
   const lines: string[] = [];
   logVerboseRunnerOutput(

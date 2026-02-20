@@ -29,6 +29,7 @@ function printLastReport(reportPath: string): void {
 
 export interface PreCommitOptions {
   verbose?: boolean;
+  reviewer?: 'codex' | 'copilot';
 }
 
 export interface PreCommitDeps {
@@ -60,7 +61,7 @@ export function runPreCommit(
     return 1;
   }
 
-  const review = runReviewFn(cwd, { verbose });
+  const review = runReviewFn(cwd, { verbose, reviewer: options.reviewer });
   if (review.pass) {
     rmSync(failCountPath, { force: true });
     return 0;

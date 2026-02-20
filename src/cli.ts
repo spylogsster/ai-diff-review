@@ -30,6 +30,8 @@ function printHelp(log: (message: string) => void): void {
   log('  install     Install .githooks/pre-commit and set core.hooksPath');
   log('');
   log('Options:');
+  log('  --codex     Force Codex reviewer only (skip Copilot fallback)');
+  log('  --copilot   Force Copilot reviewer only (skip Codex)');
   log('  --verbose   Print full prompt and raw model outputs to stdout');
 }
 
@@ -37,19 +39,36 @@ export function hasVerboseFlag(args: string[]): boolean {
   return args.includes('--verbose');
 }
 
+export function hasCodexFlag(args: string[]): boolean {
+  return args.includes('--codex');
+}
+
+export function hasCopilotFlag(args: string[]): boolean {
+  return args.includes('--copilot');
+}
+
 export function runCli(argv = process.argv.slice(2), deps: CliDeps = DEFAULT_CLI_DEPS): number {
   const command = argv[0] || 'help';
   const args = argv.slice(1);
   const verbose = hasVerboseFlag(args);
+  const useCodex = hasCodexFlag(args);
+  const useCopilot = hasCopilotFlag(args);
   const cwd = deps.getCwd();
 
+  if (useCodex && useCopilot) {
+    deps.log('Error: --codex and --copilot are mutually exclusive.');
+    return 1;
+  }
+
+  const reviewer = useCodex ? 'codex' as const : useCopilot ? 'copilot' as const : undefined;
+
   if (command === 'review') {
-    const result = deps.runReview(cwd, { verbose });
+    const result = deps.runReview(cwd, { verbose, reviewer });
     return result.pass ? 0 : 1;
   }
 
   if (command === 'pre-commit') {
-    return deps.runPreCommit(cwd, { verbose });
+    return deps.runPreCommit(cwd, { verbose, reviewer });
   }
 
   if (command === 'install') {

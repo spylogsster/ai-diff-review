@@ -17,6 +17,7 @@ const PREFLIGHT_TIMEOUT_SEC = Number(process.env.AI_REVIEW_PREFLIGHT_TIMEOUT_SEC
 
 export interface RunReviewOptions {
   verbose?: boolean;
+  reviewer?: 'codex' | 'copilot';
 }
 
 export interface RunReviewDeps {
@@ -357,6 +358,7 @@ export function runReview(
   deps: Partial<RunReviewDeps> = {},
 ): { pass: boolean; reportPath: string; reason: string } {
   const verbose = options.verbose === true;
+  const reviewer = options.reviewer;
   const runtimeDeps: RunReviewDeps = {
     getStagedDiff,
     buildPrompt,
@@ -383,13 +385,22 @@ export function runReview(
     runtimeDeps.log('----- END REVIEW PROMPT -----');
   }
 
-  runtimeDeps.log('Running Codex review...');
-  const codex = runtimeDeps.runCodex(prompt, verbose);
-
+  let codex: ReviewRunnerResult = { available: false };
   let copilot: ReviewRunnerResult = { available: false };
-  if (!codex.available) {
-    runtimeDeps.log('Codex unavailable — falling back to Copilot review...');
+
+  if (reviewer === 'copilot') {
+    runtimeDeps.log('Running Copilot review (--copilot)...');
     copilot = runtimeDeps.runCopilot(prompt, verbose);
+  } else if (reviewer === 'codex') {
+    runtimeDeps.log('Running Codex review (--codex)...');
+    codex = runtimeDeps.runCodex(prompt, verbose);
+  } else {
+    runtimeDeps.log('Running Codex review...');
+    codex = runtimeDeps.runCodex(prompt, verbose);
+    if (!codex.available) {
+      runtimeDeps.log('Codex unavailable — falling back to Copilot review...');
+      copilot = runtimeDeps.runCopilot(prompt, verbose);
+    }
   }
 
   const report: ReviewReport = {
