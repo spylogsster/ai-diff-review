@@ -3,7 +3,7 @@
 
 [![npm](https://img.shields.io/npm/v/git-ai-review)](https://www.npmjs.com/package/git-ai-review)
 
-Review your git diff with your locally installed **Claude CLI**, **Codex CLI**, or **Copilot CLI** — run it manually in one command or automatically as a git pre-commit hook.
+Review your git diff with your locally installed **Codex CLI**, **Copilot CLI**, or **Claude CLI** — run it manually in one command or automatically as a git pre-commit hook.
 
 ## Quick start
 
@@ -21,14 +21,14 @@ You can also run reviews manually:
 ```bash
 npx git-ai-review review
 npx git-ai-review review --verbose
-npx git-ai-review review --claude
 npx git-ai-review review --codex
 npx git-ai-review review --copilot
+npx git-ai-review review --claude
 ```
 
 Requirements for the target repo:
 - An `AGENTS.md` file must exist in the repo root (it's used as policy context for the review)
-- At least one reviewer CLI must be installed and authenticated: **Claude CLI** (`claude`), **Codex CLI** (`codex login`), or **Copilot CLI** (`copilot auth`)
+- At least one reviewer CLI must be installed and authenticated: **Codex CLI** (`codex login`), **Copilot CLI** (`copilot auth`), or **Claude CLI** (`claude`)
 
 ## License
 
@@ -38,8 +38,8 @@ This package is licensed under **MPL-2.0**.
 
 `git-ai-review` uses your locally installed AI CLIs to review staged changes before they are committed. You can run it on demand with a single command (`npx git-ai-review review`) or install it as a git hook so every commit is reviewed automatically.
 
-- Uses your local **Claude CLI** as the primary reviewer.
-- Falls back to **Codex CLI**, then **Copilot CLI** when the previous reviewer is unavailable.
+- Uses your local **Codex CLI** as the primary reviewer.
+- Falls back to **Copilot CLI**, then **Claude CLI** when the previous reviewer is unavailable.
 - Blocks commit when:
   - any reviewer returns `status: fail`, or
   - any findings are returned (even with `status: pass`), or
@@ -55,11 +55,11 @@ This package is licensed under **MPL-2.0**.
 At least one reviewer CLI must be installed and authenticated on each developer machine.
 Recommended: install multiple for resilient fallback behavior.
 
-- Claude CLI (`claude`) — primary reviewer
-- Codex CLI (`codex`) with active login (`codex login`)
+- Codex CLI (`codex`) with active login (`codex login`) — primary reviewer
 - Copilot CLI (`copilot`) with active login (`copilot auth`)
+- Claude CLI (`claude`)
 
-Default fallback chain: Claude → Codex → Copilot. If all are unavailable, review fails.
+Default fallback chain: Codex → Copilot → Claude. If all are unavailable, review fails.
 
 ## Install in another repository
 
@@ -86,9 +86,9 @@ Via `npx`:
 ```bash
 npx git-ai-review review
 npx git-ai-review review --verbose
-npx git-ai-review review --claude
 npx git-ai-review review --codex
 npx git-ai-review review --copilot
+npx git-ai-review review --claude
 npx git-ai-review pre-commit
 npx git-ai-review pre-commit --verbose
 npx git-ai-review install
@@ -99,9 +99,9 @@ Via npm scripts (pass flags after `--`):
 ```bash
 npm run git-ai-review -- review
 npm run git-ai-review -- review --verbose
-npm run git-ai-review -- review --claude
 npm run git-ai-review -- review --codex
 npm run git-ai-review -- review --copilot
+npm run git-ai-review -- review --claude
 npm run git-ai-review -- pre-commit
 npm run git-ai-review -- pre-commit --verbose
 npm run git-ai-review -- install
@@ -111,9 +111,9 @@ npm run git-ai-review -- install
 
 - `review`: run AI review against staged diff.
 - `review --verbose`: print full prompt plus raw model outputs to stdout.
-- `review --claude`: force Claude reviewer only (skip Codex/Copilot fallback).
-- `review --codex`: force Codex reviewer only (skip Claude/Copilot fallback).
-- `review --copilot`: force Copilot reviewer only (skip Claude/Codex).
+- `review --codex`: force Codex reviewer only (skip Copilot/Claude fallback).
+- `review --copilot`: force Copilot reviewer only (skip Codex/Claude).
+- `review --claude`: force Claude reviewer only (skip Codex/Copilot).
 - `pre-commit`: run lock-aware pre-commit flow (recommended for hooks).
 - `pre-commit --verbose`: same as pre-commit, but with detailed prompt/raw model logs.
 - `install`: install hook script and set `core.hooksPath`.
@@ -138,9 +138,9 @@ In each target repository:
 
 ## Environment variables
 
-- `CLAUDE_BIN`: custom Claude executable path/name.
 - `CODEX_BIN`: custom Codex executable path/name.
 - `COPILOT_BIN`: custom Copilot executable path/name.
+- `CLAUDE_BIN`: custom Claude executable path/name.
 - `COPILOT_REVIEW_MODEL`: default `gpt-5.3-codex`.
 - `AI_REVIEW_TIMEOUT_MS`: default `300000` (5 min).
 - `AI_REVIEW_PREFLIGHT_TIMEOUT_SEC`: default `8`.
@@ -156,9 +156,9 @@ In each target repository:
 Use `--verbose` to print:
 
 - full generated review prompt
-- raw Claude stdout/stderr
 - raw Codex stdout/stderr and structured response file
-- raw Copilot stdout/stderr (when fallback runs)
+- raw Copilot stdout/stderr
+- raw Claude stdout/stderr
 
 This is useful for debugging prompt behavior and model integration issues.
 

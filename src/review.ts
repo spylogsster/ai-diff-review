@@ -569,14 +569,14 @@ export async function runReview(
     runtimeDeps.log('Running Codex review (--codex)...');
     codex = await runtimeDeps.runCodex(prompt, verbose);
   } else {
-    runtimeDeps.log('Running Claude review...');
-    claude = await runtimeDeps.runClaude(prompt, verbose);
-    if (!claude.available) {
-      runtimeDeps.log('Claude unavailable — falling back to Codex review...');
-      codex = await runtimeDeps.runCodex(prompt, verbose);
-      if (!codex.available) {
-        runtimeDeps.log('Codex unavailable — falling back to Copilot review...');
-        copilot = await runtimeDeps.runCopilot(prompt, verbose);
+    runtimeDeps.log('Running Codex review...');
+    codex = await runtimeDeps.runCodex(prompt, verbose);
+    if (!codex.available) {
+      runtimeDeps.log('Codex unavailable — falling back to Copilot review...');
+      copilot = await runtimeDeps.runCopilot(prompt, verbose);
+      if (!copilot.available) {
+        runtimeDeps.log('Copilot unavailable — falling back to Claude review...');
+        claude = await runtimeDeps.runClaude(prompt, verbose);
       }
     }
   }

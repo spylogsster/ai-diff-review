@@ -410,7 +410,7 @@ test('runReview with reviewer=copilot skips Claude and Codex', async () => {
   assert.equal(result.pass, true);
 });
 
-test('runReview without reviewer uses default Claude-first fallback chain', async () => {
+test('runReview without reviewer uses default Codex-first fallback chain', async () => {
   let claudeCalled = false;
   let codexCalled = false;
   let copilotCalled = false;
@@ -423,7 +423,7 @@ test('runReview without reviewer uses default Claude-first fallback chain', asyn
       buildPrompt: () => 'PROMPT',
       runClaude: () => {
         claudeCalled = true;
-        return Promise.resolve({ available: false });
+        return Promise.resolve({ available: true, result: PASS_RESULT });
       },
       runCodex: () => {
         codexCalled = true;
@@ -431,20 +431,20 @@ test('runReview without reviewer uses default Claude-first fallback chain', asyn
       },
       runCopilot: () => {
         copilotCalled = true;
-        return Promise.resolve({ available: true, result: PASS_RESULT });
+        return Promise.resolve({ available: false });
       },
       writeReport: () => {},
       log: () => {},
     },
   );
 
-  assert.equal(claudeCalled, true);
   assert.equal(codexCalled, true);
   assert.equal(copilotCalled, true);
+  assert.equal(claudeCalled, true);
   assert.equal(result.pass, true);
 });
 
-test('runReview default chain stops at Claude when available', async () => {
+test('runReview default chain stops at Codex when available', async () => {
   let claudeCalled = false;
   let codexCalled = false;
   let copilotCalled = false;
@@ -472,9 +472,9 @@ test('runReview default chain stops at Claude when available', async () => {
     },
   );
 
-  assert.equal(claudeCalled, true);
-  assert.equal(codexCalled, false);
+  assert.equal(codexCalled, true);
   assert.equal(copilotCalled, false);
+  assert.equal(claudeCalled, false);
   assert.equal(result.pass, true);
 });
 

@@ -30,9 +30,9 @@ function printHelp(log: (message: string) => void): void {
   log('  install     Install .githooks/pre-commit and set core.hooksPath');
   log('');
   log('Options:');
-  log('  --claude    Force Claude reviewer only (skip Codex/Copilot fallback)');
-  log('  --codex     Force Codex reviewer only (skip Claude/Copilot fallback)');
-  log('  --copilot   Force Copilot reviewer only (skip Claude/Codex)');
+  log('  --codex     Force Codex reviewer only (skip Copilot/Claude fallback)');
+  log('  --copilot   Force Copilot reviewer only (skip Codex/Claude)');
+  log('  --claude    Force Claude reviewer only (skip Codex/Copilot)');
   log('  --verbose   Print full prompt and raw model outputs to stdout');
 }
 

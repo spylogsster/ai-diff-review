@@ -8,7 +8,7 @@ All contributors and AI agents must follow these rules.
 ## Scope
 
 - This package owns the `git-ai-review` CLI and related review/hook logic.
-- Supports Claude CLI, Codex CLI, and Copilot CLI as reviewers (Claude is the primary reviewer).
+- Supports Codex CLI, Copilot CLI, and Claude CLI as reviewers (Codex is the primary reviewer).
 - The package must remain reusable across arbitrary repositories.
 - Avoid repo-specific assumptions except for explicit `AGENTS.md`-based policy loading.
 
