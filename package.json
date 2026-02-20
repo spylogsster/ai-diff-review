@@ -32,6 +32,14 @@
   ],
   "author": "Sergei Poletaev <spylogsster@gmail.com>",
   "license": "MPL-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/spylogsster/git-ai-review.git"
+  },
+  "homepage": "https://github.com/spylogsster/git-ai-review#readme",
+  "bugs": {
+    "url": "https://github.com/spylogsster/git-ai-review/issues"
+  },
   "devDependencies": {
     "@types/node": "^22.13.1",
     "tsx": "^4.20.6",
