@@ -52,6 +52,10 @@ export function logVerboseRunnerOutput(
   log(`----- END ${label} RAW OUTPUT -----\n`);
 }
 
+export function needsShellForBinary(binary: string, osPlatform = process.platform): boolean {
+  return osPlatform === 'win32' && /\.(cmd|bat)$/i.test(binary);
+}
+
 function canReach(url: string): boolean {
   try {
     const out = execFileSync(
@@ -70,6 +74,14 @@ export function resolveCommandFromPath(candidate: string): string | null {
     return null;
   }
   try {
+    if (process.platform === 'win32') {
+      const lines = execFileSync('where', [candidate], { encoding: 'utf8', stdio: 'pipe' })
+        .trim()
+        .split(/\r?\n/)
+        .filter(Boolean);
+      const exe = lines.find((l) => /\.(exe|cmd|bat)$/i.test(l));
+      return exe || lines[0] || null;
+    }
     const path = execFileSync('sh', ['-lc', `command -v ${candidate}`], { encoding: 'utf8' }).trim();
     return path || null;
   } catch {
@@ -230,6 +242,7 @@ function runCodex(prompt: string, verbose: boolean): ReviewRunnerResult {
         encoding: 'utf8',
         timeout: TIMEOUT_MS,
         input: readFileSync(promptPath, 'utf8'),
+        ...(needsShellForBinary(codex) ? { shell: true } : {}),
       },
     );
 
@@ -279,6 +292,7 @@ function runCopilot(prompt: string, verbose: boolean): ReviewRunnerResult {
         encoding: 'utf8',
         timeout: TIMEOUT_MS,
         input: prompt,
+        ...(needsShellForBinary(copilot) ? { shell: true } : {}),
       },
     );
 

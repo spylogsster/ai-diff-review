@@ -18,7 +18,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test tests/**/*.test.mts",
+    "test": "node scripts/run-tests.mjs",
     "prepare": "npm run build"
   },
   "keywords": [

@@ -12,6 +12,9 @@ test('runPreCommit forwards verbose=true to runReview', () => {
   const cwd = mkdtempSync(join(tmpdir(), 'ai-review-precommit-test-'));
   mkdirSync(join(cwd, '.git'), { recursive: true });
 
+  const savedCI = process.env.CI;
+  delete process.env.CI;
+
   let capturedVerbose = false;
   try {
     const code = runPreCommit(
@@ -28,6 +31,7 @@ test('runPreCommit forwards verbose=true to runReview', () => {
     assert.equal(code, 0);
     assert.equal(capturedVerbose, true);
   } finally {
+    if (savedCI !== undefined) process.env.CI = savedCI;
     rmSync(cwd, { recursive: true, force: true });
   }
 });

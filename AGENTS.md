@@ -22,6 +22,9 @@ All contributors and AI agents must follow these rules.
   - shared types in `src/types.ts`
 - Do not collapse domains into a single large file.
 - Export testable pure functions for parsing, policy extraction, and verdict logic.
+- Never use inline code in npm scripts via `node -e` or `node --input-type=module -e`. Always keep code in dedicated script files.
+- All imports must be at the top of the file, below the license header section. Inline imports (e.g., `await import()` inside functions) are prohibited.
+- All changes must work on macOS, Linux, and Windows. Avoid platform-specific shell features (e.g., globstar, POSIX-only commands) in npm scripts; use cross-platform Node.js solutions or well-known npm packages instead.
 
 ## Prompt and Policy Rules
 
