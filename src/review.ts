@@ -1,16 +1,55 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * Copyright (c) 2026 ai-review contributors
+ */
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
+import { platform, tmpdir } from 'node:os';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { REVIEW_SCHEMA } from './schema.js';
 import type { ParsedReview, ReviewReport, ReviewRunnerResult } from './types.js';
-import { buildAgentsContext } from './prompt.js';
+import { buildAgentsContext, resolvePromptHeaderLines } from './prompt.js';
 import { getGitPath, git } from './git.js';
 
 const COPILOT_MODEL = process.env.COPILOT_REVIEW_MODEL || 'gpt-5.3-codex';
 const TIMEOUT_MS = Number(process.env.AI_REVIEW_TIMEOUT_MS || 180000);
 const PREFLIGHT_TIMEOUT_SEC = Number(process.env.AI_REVIEW_PREFLIGHT_TIMEOUT_SEC || 8);
+
+export interface RunReviewOptions {
+  verbose?: boolean;
+}
+
+export interface RunReviewDeps {
+  getStagedDiff: () => string;
+  buildPrompt: (diff: string, cwd: string) => string;
+  runCodex: (prompt: string, verbose: boolean) => ReviewRunnerResult;
+  runCopilot: (prompt: string, verbose: boolean) => ReviewRunnerResult;
+  writeReport: (reportPath: string, report: ReviewReport) => void;
+  log: (message: string) => void;
+}
+
+export interface VerboseRunnerOutput {
+  model: string;
+  stdout: string;
+  stderr: string;
+  responseFile?: string;
+}
+
+export function logVerboseRunnerOutput(
+  output: VerboseRunnerOutput,
+  log: (message: string) => void = console.log,
+): void {
+  const label = output.model.toUpperCase();
+  log(`\n----- ${label} STDOUT (RAW) -----`);
+  log(output.stdout || '');
+  log(`----- ${label} STDERR (RAW) -----`);
+  log(output.stderr || '');
+  if (output.responseFile !== undefined) {
+    log(`----- ${label} RESPONSE FILE (RAW) -----`);
+    log(output.responseFile);
+  }
+  log(`----- END ${label} RAW OUTPUT -----\n`);
+}
 
 function canReach(url: string): boolean {
   try {
@@ -25,20 +64,68 @@ function canReach(url: string): boolean {
   }
 }
 
-function resolveBinary(envName: string, candidates: string[]): string | null {
-  const envBinary = process.env[envName]?.trim();
+function resolveCommandFromPath(candidate: string): string | null {
+  try {
+    const path = execFileSync('sh', ['-lc', `command -v ${candidate}`], { encoding: 'utf8' }).trim();
+    return path || null;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveCodexMacAppBinary(
+  osPlatform = platform(),
+  pathExists: (path: string) => boolean = existsSync,
+): string | null {
+  if (osPlatform !== 'darwin' || !pathExists('/Applications/Codex.app')) {
+    return null;
+  }
+
+  const bundleCandidates = [
+    '/Applications/Codex.app/Contents/Resources/codex',
+    '/Applications/Codex.app/Contents/Resources/Codex',
+  ];
+
+  for (const candidate of bundleCandidates) {
+    if (pathExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+export interface ResolveBinaryOptions {
+  env?: NodeJS.ProcessEnv;
+  resolveFromPath?: (candidate: string) => string | null;
+  resolveCodexFallback?: () => string | null;
+}
+
+export function resolveBinary(
+  envName: string,
+  candidates: string[],
+  options: ResolveBinaryOptions = {},
+): string | null {
+  const env = options.env ?? process.env;
+  const resolveFromPath = options.resolveFromPath ?? resolveCommandFromPath;
+  const resolveCodexFallback = options.resolveCodexFallback ?? resolveCodexMacAppBinary;
+
+  const envBinary = env[envName]?.trim();
   if (envBinary) {
     return envBinary;
   }
 
   for (const candidate of candidates) {
-    try {
-      const path = execFileSync('sh', ['-lc', `command -v ${candidate}`], { encoding: 'utf8' }).trim();
-      if (path) {
-        return path;
-      }
-    } catch {
-      continue;
+    const path = resolveFromPath(candidate);
+    if (path) {
+      return path;
+    }
+  }
+
+  if (envName === 'CODEX_BIN') {
+    const codexAppBinary = resolveCodexFallback();
+    if (codexAppBinary) {
+      return codexAppBinary;
     }
   }
 
@@ -52,11 +139,7 @@ function getStagedDiff(): string {
 function buildPrompt(diff: string, cwd = process.cwd()): string {
   const context = buildAgentsContext(cwd);
   return [
-    'You are a strict reviewer for all AGENTS.md rules.',
-    'Review ONLY the staged git diff provided below.',
-    'Focus on: safety, architecture correctness, clean logic, componentization quality, likely regressions, maintainability.',
-    'Do not comment on formatting-only changes unless they create risk.',
-    'Return status=fail if any meaningful issue exists.',
+    ...resolvePromptHeaderLines(),
     '',
     'Here is the full AGENTS.md for reference:',
     context.agents,
@@ -103,7 +186,7 @@ export function parseSubagentOutput(raw: string): ParsedReview {
   return parsed as ParsedReview;
 }
 
-function runCodex(prompt: string): ReviewRunnerResult {
+function runCodex(prompt: string, verbose: boolean): ReviewRunnerResult {
   const codex = resolveBinary('CODEX_BIN', ['codex']);
   if (!codex) {
     console.error('Codex: binary not found in PATH (or CODEX_BIN not set) — skipping.');
@@ -123,16 +206,21 @@ function runCodex(prompt: string): ReviewRunnerResult {
   writeFileSync(schemaPath, JSON.stringify(REVIEW_SCHEMA, null, 2), 'utf8');
 
   try {
-    const run = spawnSync(
-      codex,
-      [
+    const codexCommand = [
         'exec',
         '--ephemeral',
         '--sandbox', 'read-only',
         '--output-schema', schemaPath,
         '--output-last-message', resultPath,
-        '-',
-      ],
+        '-'
+    ];
+
+    if (verbose) {
+      console.log(codex, codexCommand.join(' '))
+    }
+    const run = spawnSync(
+      codex,
+      codexCommand,
       {
         cwd: process.cwd(),
         encoding: 'utf8',
@@ -140,6 +228,15 @@ function runCodex(prompt: string): ReviewRunnerResult {
         input: readFileSync(promptPath, 'utf8'),
       },
     );
+
+    if (verbose) {
+      logVerboseRunnerOutput({
+        model: 'Codex',
+        stdout: run.stdout || '',
+        stderr: run.stderr || '',
+        responseFile: existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : undefined,
+      });
+    }
 
     if (run.status !== 0 || !existsSync(resultPath)) {
       const err = (run.stderr || run.stdout || '').trim();
@@ -157,7 +254,7 @@ function runCodex(prompt: string): ReviewRunnerResult {
   }
 }
 
-function runCopilot(prompt: string): ReviewRunnerResult {
+function runCopilot(prompt: string, verbose: boolean): ReviewRunnerResult {
   const copilot = resolveBinary('COPILOT_BIN', ['copilot']);
   if (!copilot) {
     console.error('Copilot: binary not found in PATH (or COPILOT_BIN not set) — skipping.');
@@ -180,6 +277,14 @@ function runCopilot(prompt: string): ReviewRunnerResult {
         input: prompt,
       },
     );
+
+    if (verbose) {
+      logVerboseRunnerOutput({
+        model: 'Copilot',
+        stdout: run.stdout || '',
+        stderr: run.stderr || '',
+      });
+    }
 
     if (run.status !== 0) {
       const err = (run.stderr || run.stdout || '').trim();
@@ -243,22 +348,45 @@ function printReview(model: string, result: ParsedReview): void {
   }
 }
 
-export function runReview(cwd = process.cwd()): { pass: boolean; reportPath: string; reason: string } {
-  const diff = getStagedDiff();
+export function runReview(
+  cwd = process.cwd(),
+  options: RunReviewOptions = {},
+  deps: Partial<RunReviewDeps> = {},
+): { pass: boolean; reportPath: string; reason: string } {
+  const verbose = options.verbose === true;
+  const runtimeDeps: RunReviewDeps = {
+    getStagedDiff,
+    buildPrompt,
+    runCodex,
+    runCopilot,
+    writeReport: (reportPath, report) => {
+      writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf8');
+    },
+    log: (message) => console.log(message),
+    ...deps,
+  };
+
+  const diff = runtimeDeps.getStagedDiff();
   if (!diff) {
-    console.log('AI review: no staged changes.');
+    runtimeDeps.log('AI review: no staged changes.');
     return { pass: true, reportPath: resolve(cwd, getGitPath('ai-review-last.json')), reason: 'No staged changes.' };
   }
 
-  const prompt = buildPrompt(diff, cwd);
+  const prompt = runtimeDeps.buildPrompt(diff, cwd);
 
-  console.log('Running Codex review...');
-  const codex = runCodex(prompt);
+  if (verbose) {
+    runtimeDeps.log('----- REVIEW PROMPT (FULL) -----');
+    runtimeDeps.log(prompt);
+    runtimeDeps.log('----- END REVIEW PROMPT -----');
+  }
+
+  runtimeDeps.log('Running Codex review...');
+  const codex = runtimeDeps.runCodex(prompt, verbose);
 
   let copilot: ReviewRunnerResult = { available: false };
   if (!codex.available) {
-    console.log('Codex unavailable — falling back to Copilot review...');
-    copilot = runCopilot(prompt);
+    runtimeDeps.log('Codex unavailable — falling back to Copilot review...');
+    copilot = runtimeDeps.runCopilot(prompt, verbose);
   }
 
   const report: ReviewReport = {
@@ -267,8 +395,8 @@ export function runReview(cwd = process.cwd()): { pass: boolean; reportPath: str
   };
 
   const reportPath = resolve(cwd, process.env.AI_REVIEW_REPORT_PATH || getGitPath('ai-review-last.json'));
-  writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf8');
-  console.log(`AI review raw report saved: ${reportPath}`);
+  runtimeDeps.writeReport(reportPath, report);
+  runtimeDeps.log(`AI review raw report saved: ${reportPath}`);
 
   if (codex.available) {
     printReview('Codex', codex.result);

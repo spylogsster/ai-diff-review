@@ -1,11 +1,26 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * Copyright (c) 2026 ai-review contributors
+ */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseSubagentOutput, evaluateResults } from '../src/review.ts';
-import { extractReferencedMarkdownFiles, buildReferencedMarkdownContext } from '../src/prompt.ts';
+import {
+  parseSubagentOutput,
+  evaluateResults,
+  resolveBinary,
+  resolveCodexMacAppBinary,
+  logVerboseRunnerOutput,
+  runReview,
+} from '../src/review.ts';
+import {
+  extractReferencedMarkdownFiles,
+  buildReferencedMarkdownContext,
+  resolvePromptHeaderLines,
+  DEFAULT_PROMPT_HEADER_LINES,
+} from '../src/prompt.ts';
 
 const PASS_RESULT = { status: 'pass', summary: 'No issues', findings: [] };
-const FAIL_RESULT = { status: 'fail', summary: 'Bad code', findings: [{ severity: 'high', title: 'Bug', details: 'x' }] };
-const PASS_WITH_FINDINGS = { status: 'pass', summary: 'Needs fixes', findings: [{ severity: 'low', title: 'Nit', details: 'y' }] };
+const FAIL_RESULT = { status: 'fail', summary: 'Bad code', findings: [{ severity: 'high', title: 'Bug', details: 'x', file: 'src/file.ts', line: 1 }] };
+const PASS_WITH_FINDINGS = { status: 'pass', summary: 'Needs fixes', findings: [{ severity: 'low', title: 'Nit', details: 'y', file: 'src/file.ts', line: 2 }] };
 
 test('parseSubagentOutput accepts valid payload', () => {
   const parsed = parseSubagentOutput(JSON.stringify(PASS_RESULT));
@@ -64,4 +79,154 @@ test('evaluateResults blocks explicit failure', () => {
     { available: false },
   );
   assert.equal(verdict.pass, false);
+});
+
+
+test('resolvePromptHeaderLines returns defaults when unset', () => {
+  const lines = resolvePromptHeaderLines(undefined);
+  assert.deepEqual(lines, [...DEFAULT_PROMPT_HEADER_LINES]);
+});
+
+test('resolvePromptHeaderLines accepts JSON array override', () => {
+  const lines = resolvePromptHeaderLines('["Line A","Line B"]');
+  assert.deepEqual(lines, ['Line A', 'Line B']);
+});
+
+test('resolvePromptHeaderLines accepts multiline override', () => {
+  const lines = resolvePromptHeaderLines('Line A\nLine B');
+  assert.deepEqual(lines, ['Line A', 'Line B']);
+});
+
+test('resolvePromptHeaderLines falls back to defaults for empty override', () => {
+  const lines = resolvePromptHeaderLines('   ');
+  assert.deepEqual(lines, [...DEFAULT_PROMPT_HEADER_LINES]);
+});
+
+test('resolvePromptHeaderLines falls back to defaults for empty JSON array', () => {
+  const lines = resolvePromptHeaderLines('[]');
+  assert.deepEqual(lines, [...DEFAULT_PROMPT_HEADER_LINES]);
+});
+
+
+test('resolveCodexMacAppBinary returns bundle executable on macOS when app exists', () => {
+  const existing = new Set([
+    '/Applications/Codex.app',
+    '/Applications/Codex.app/Contents/Resources/codex',
+  ]);
+
+  const resolved = resolveCodexMacAppBinary('darwin', (path) => existing.has(path));
+  assert.equal(resolved, '/Applications/Codex.app/Contents/Resources/codex');
+});
+
+test('resolveCodexMacAppBinary returns null outside macOS', () => {
+  const resolved = resolveCodexMacAppBinary('linux', () => true);
+  assert.equal(resolved, null);
+});
+
+test('resolveBinary prefers env override over PATH and fallback', () => {
+  const resolved = resolveBinary(
+    'CODEX_BIN',
+    ['codex'],
+    {
+      env: { CODEX_BIN: '/custom/codex' } as NodeJS.ProcessEnv,
+      resolveFromPath: () => '/usr/local/bin/codex',
+      resolveCodexFallback: () => '/Applications/Codex.app/Contents/Resources/codex',
+    },
+  );
+
+  assert.equal(resolved, '/custom/codex');
+});
+
+test('resolveBinary prefers PATH before macOS fallback', () => {
+  const resolved = resolveBinary(
+    'CODEX_BIN',
+    ['codex'],
+    {
+      env: {} as NodeJS.ProcessEnv,
+      resolveFromPath: () => '/usr/local/bin/codex',
+      resolveCodexFallback: () => '/Applications/Codex.app/Contents/Resources/codex',
+    },
+  );
+
+  assert.equal(resolved, '/usr/local/bin/codex');
+});
+
+test('resolveBinary uses macOS fallback for CODEX_BIN when env and PATH are missing', () => {
+  const resolved = resolveBinary(
+    'CODEX_BIN',
+    ['codex'],
+    {
+      env: {} as NodeJS.ProcessEnv,
+      resolveFromPath: () => null,
+      resolveCodexFallback: () => '/Applications/Codex.app/Contents/Resources/codex',
+    },
+  );
+
+  assert.equal(resolved, '/Applications/Codex.app/Contents/Resources/codex');
+});
+
+test('runReview uses verbose branch and forwards verbose to reviewers', () => {
+  const logs: string[] = [];
+  let codexVerbose = false;
+  let copilotVerbose = false;
+
+  const result = runReview(
+    '/tmp/repo',
+    { verbose: true },
+    {
+      getStagedDiff: () => 'diff --cached',
+      buildPrompt: () => 'PROMPT_CONTENT',
+      runCodex: (_prompt, verbose) => {
+        codexVerbose = verbose;
+        return { available: false };
+      },
+      runCopilot: (_prompt, verbose) => {
+        copilotVerbose = verbose;
+        return { available: false };
+      },
+      writeReport: () => {},
+      log: (line) => {
+        logs.push(line);
+      },
+    },
+  );
+
+  assert.equal(codexVerbose, true);
+  assert.equal(copilotVerbose, true);
+  assert.equal(result.pass, false);
+  assert.ok(logs.includes('----- REVIEW PROMPT (FULL) -----'));
+  assert.ok(logs.includes('PROMPT_CONTENT'));
+});
+
+test('logVerboseRunnerOutput prints stdout, stderr, and response file', () => {
+  const lines: string[] = [];
+  logVerboseRunnerOutput(
+    {
+      model: 'Codex',
+      stdout: 'out-data',
+      stderr: 'err-data',
+      responseFile: '{"status":"pass"}',
+    },
+    (msg) => lines.push(msg),
+  );
+
+  assert.ok(lines.some((l) => l.includes('CODEX STDOUT (RAW)')));
+  assert.ok(lines.includes('out-data'));
+  assert.ok(lines.some((l) => l.includes('CODEX STDERR (RAW)')));
+  assert.ok(lines.includes('err-data'));
+  assert.ok(lines.some((l) => l.includes('CODEX RESPONSE FILE (RAW)')));
+  assert.ok(lines.includes('{"status":"pass"}'));
+  assert.ok(lines.some((l) => l.includes('END CODEX RAW OUTPUT')));
+});
+
+test('logVerboseRunnerOutput omits response file section when not provided', () => {
+  const lines: string[] = [];
+  logVerboseRunnerOutput(
+    { model: 'Copilot', stdout: 'ok', stderr: '' },
+    (msg) => lines.push(msg),
+  );
+
+  assert.ok(lines.some((l) => l.includes('COPILOT STDOUT (RAW)')));
+  assert.ok(!lines.some((l) => l.includes('RESPONSE FILE')));
+  assert.ok(lines.some((l) => l.includes('END COPILOT RAW OUTPUT')));
 });

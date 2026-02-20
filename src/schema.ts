@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * Copyright (c) 2026 ai-review contributors
+ */
 export const REVIEW_SCHEMA = {
   type: 'object',
   additionalProperties: false,
@@ -10,13 +13,13 @@ export const REVIEW_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        required: ['severity', 'title', 'details'],
+        required: ['severity', 'title', 'details', 'file', 'line'],
         properties: {
           severity: { type: 'string' },
           title: { type: 'string' },
           details: { type: 'string' },
-          file: { type: 'string' },
-          line: { type: 'integer', minimum: 1 },
+          file: { type: ['string', 'null'] },
+          line: { type: ['integer', 'null'], minimum: 1 },
         },
       },
     },

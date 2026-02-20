@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * Copyright (c) 2026 ai-review contributors
+ */
 import { execFileSync } from 'node:child_process';
 
 export function git(args: string[], cwd = process.cwd()): string {

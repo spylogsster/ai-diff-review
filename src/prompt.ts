@@ -1,6 +1,45 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * Copyright (c) 2026 ai-review contributors
+ */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { git } from './git.js';
+
+export const DEFAULT_PROMPT_HEADER_LINES = [
+  'You are a strict reviewer for all AGENTS.md rules.',
+  'Review ONLY the staged git diff provided below.',
+  'Focus on: safety, architecture correctness, clean logic, componentization quality, likely regressions, maintainability.',
+  'Do not comment on formatting-only changes unless they create risk.',
+  'Return status=fail if any meaningful issue exists.',
+] as const;
+
+export function resolvePromptHeaderLines(rawValue = process.env.AI_REVIEW_PROMPT_HEADER): string[] {
+  const value = rawValue?.trim();
+  if (!value) {
+    return [...DEFAULT_PROMPT_HEADER_LINES];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      const lines = parsed
+        .filter((line): line is string => typeof line === 'string')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      return lines.length > 0 ? lines : [...DEFAULT_PROMPT_HEADER_LINES];
+    }
+  } catch {
+    // fallback to plain multiline text parsing
+  }
+
+  const lines = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+  return lines.length > 0 ? lines : [...DEFAULT_PROMPT_HEADER_LINES];
+}
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

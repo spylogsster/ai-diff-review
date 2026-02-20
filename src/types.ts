@@ -1,9 +1,12 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * Copyright (c) 2026 ai-review contributors
+ */
 export interface ReviewFinding {
   severity: string;
   title: string;
   details: string;
-  file?: string;
-  line?: number;
+  file: string | null;
+  line: number | null;
 }
 
 export interface ParsedReview {

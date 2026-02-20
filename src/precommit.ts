@@ -1,3 +1,6 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * Copyright (c) 2026 ai-review contributors
+ */
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getGitPath } from './git.js';
@@ -24,7 +27,22 @@ function printLastReport(reportPath: string): void {
   }
 }
 
-export function runPreCommit(cwd = process.cwd()): number {
+export interface PreCommitOptions {
+  verbose?: boolean;
+}
+
+export interface PreCommitDeps {
+  runReviewFn: typeof runReview;
+}
+
+export function runPreCommit(
+  cwd = process.cwd(),
+  options: PreCommitOptions = {},
+  deps: Partial<PreCommitDeps> = {},
+): number {
+  const verbose = options.verbose === true;
+  const runReviewFn = deps.runReviewFn ?? runReview;
+
   if (isCiEnvironment()) {
     console.log('Skip AI review in CI.');
     return 0;
@@ -42,7 +60,7 @@ export function runPreCommit(cwd = process.cwd()): number {
     return 1;
   }
 
-  const review = runReview(cwd);
+  const review = runReviewFn(cwd, { verbose });
   if (review.pass) {
     rmSync(failCountPath, { force: true });
     return 0;

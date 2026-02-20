@@ -29,7 +29,7 @@
     "copilot"
   ],
   "author": "",
-  "license": "MIT",
+  "license": "MPL-2.0",
   "devDependencies": {
     "@types/node": "^22.13.1",
     "tsx": "^4.20.6",

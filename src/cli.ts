@@ -1,33 +1,62 @@
+/* SPDX-License-Identifier: MPL-2.0
+ * Copyright (c) 2026 ai-review contributors
+ */
 import { runReview } from './review.js';
 import { runPreCommit } from './precommit.js';
 import { installPreCommitHook } from './install.js';
 
-function printHelp(): void {
-  console.log('ai-review-hook <command>');
-  console.log('');
-  console.log('Commands:');
-  console.log('  review      Run AI review for staged changes');
-  console.log('  pre-commit  Run lock-aware pre-commit flow');
-  console.log('  install     Install .githooks/pre-commit and set core.hooksPath');
+export interface CliDeps {
+  runReview: typeof runReview;
+  runPreCommit: typeof runPreCommit;
+  installPreCommitHook: typeof installPreCommitHook;
+  getCwd: () => string;
+  log: (message: string) => void;
 }
 
-export function runCli(argv = process.argv.slice(2)): number {
+const DEFAULT_CLI_DEPS: CliDeps = {
+  runReview,
+  runPreCommit,
+  installPreCommitHook,
+  getCwd: () => process.cwd(),
+  log: (message) => console.log(message),
+};
+
+function printHelp(log: (message: string) => void): void {
+  log('ai-review-hook <command> [options]');
+  log('');
+  log('Commands:');
+  log('  review      Run AI review for staged changes');
+  log('  pre-commit  Run lock-aware pre-commit flow');
+  log('  install     Install .githooks/pre-commit and set core.hooksPath');
+  log('');
+  log('Options:');
+  log('  --verbose   Print full prompt and raw model outputs to stdout');
+}
+
+export function hasVerboseFlag(args: string[]): boolean {
+  return args.includes('--verbose');
+}
+
+export function runCli(argv = process.argv.slice(2), deps: CliDeps = DEFAULT_CLI_DEPS): number {
   const command = argv[0] || 'help';
+  const args = argv.slice(1);
+  const verbose = hasVerboseFlag(args);
+  const cwd = deps.getCwd();
 
   if (command === 'review') {
-    const result = runReview();
+    const result = deps.runReview(cwd, { verbose });
     return result.pass ? 0 : 1;
   }
 
   if (command === 'pre-commit') {
-    return runPreCommit();
+    return deps.runPreCommit(cwd, { verbose });
   }
 
   if (command === 'install') {
-    installPreCommitHook();
+    deps.installPreCommitHook();
     return 0;
   }
 
-  printHelp();
+  printHelp(deps.log);
   return command === 'help' || command === '--help' || command === '-h' ? 0 : 1;
 }
