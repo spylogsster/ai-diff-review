@@ -8,6 +8,7 @@ import {
   evaluateResults,
   resolveBinary,
   resolveCodexMacAppBinary,
+  resolveCommandFromPath,
   logVerboseRunnerOutput,
   runReview,
 } from '../src/review.ts';
@@ -116,6 +117,13 @@ test('resolveCodexMacAppBinary returns bundle executable on macOS when app exist
 
   const resolved = resolveCodexMacAppBinary('darwin', (path) => existing.has(path));
   assert.equal(resolved, '/Applications/Codex.app/Contents/Resources/codex');
+});
+
+test('resolveCommandFromPath rejects candidates with shell metacharacters', () => {
+  assert.equal(resolveCommandFromPath('$(whoami)'), null);
+  assert.equal(resolveCommandFromPath('foo;rm -rf /'), null);
+  assert.equal(resolveCommandFromPath('a b'), null);
+  assert.equal(resolveCommandFromPath('cmd`id`'), null);
 });
 
 test('resolveCodexMacAppBinary returns null outside macOS', () => {

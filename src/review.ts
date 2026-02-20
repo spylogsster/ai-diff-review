@@ -64,7 +64,10 @@ function canReach(url: string): boolean {
   }
 }
 
-function resolveCommandFromPath(candidate: string): string | null {
+export function resolveCommandFromPath(candidate: string): string | null {
+  if (!/^[a-zA-Z0-9_./-]+$/.test(candidate)) {
+    return null;
+  }
   try {
     const path = execFileSync('sh', ['-lc', `command -v ${candidate}`], { encoding: 'utf8' }).trim();
     return path || null;
