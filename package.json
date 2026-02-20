@@ -1,0 +1,38 @@
+{
+  "name": "ai-review-hook",
+  "version": "0.1.0",
+  "description": "Git pre-commit AI review hook with Codex primary and Copilot fallback",
+  "type": "module",
+  "main": "dist/cli.js",
+  "bin": {
+    "ai-review-hook": "dist/bin/ai-review-hook.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test tests/**/*.test.mts",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "git-hooks",
+    "pre-commit",
+    "ai",
+    "codex",
+    "copilot"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.8.3"
+  }
+}
