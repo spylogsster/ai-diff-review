@@ -331,6 +331,54 @@ test('runReview uses verbose branch and forwards verbose to reviewers', async ()
   assert.ok(logs.includes('PROMPT_CONTENT'));
 });
 
+test('runReview skips reviewers and alerts when diff is empty string', async () => {
+  const logs: string[] = [];
+  let claudeCalled = false;
+
+  const result = await runReview(
+    '/tmp/repo',
+    {},
+    {
+      getStagedDiff: () => '',
+      buildPrompt: () => 'PROMPT',
+      runClaude: () => { claudeCalled = true; return Promise.resolve({ available: false }); },
+      runCodex: () => { return Promise.resolve({ available: false }); },
+      runCopilot: () => { return Promise.resolve({ available: false }); },
+      writeReport: () => {},
+      log: (line) => { logs.push(line); },
+    },
+  );
+
+  assert.equal(result.pass, true);
+  assert.equal(result.reason, 'Empty diff.');
+  assert.equal(claudeCalled, false);
+  assert.ok(logs.some((l) => l.includes('diff is empty')));
+});
+
+test('runReview skips reviewers and alerts when diff is whitespace-only', async () => {
+  const logs: string[] = [];
+  let claudeCalled = false;
+
+  const result = await runReview(
+    '/tmp/repo',
+    {},
+    {
+      getStagedDiff: () => '   \n  \n  ',
+      buildPrompt: () => 'PROMPT',
+      runClaude: () => { claudeCalled = true; return Promise.resolve({ available: false }); },
+      runCodex: () => { return Promise.resolve({ available: false }); },
+      runCopilot: () => { return Promise.resolve({ available: false }); },
+      writeReport: () => {},
+      log: (line) => { logs.push(line); },
+    },
+  );
+
+  assert.equal(result.pass, true);
+  assert.equal(result.reason, 'Empty diff.');
+  assert.equal(claudeCalled, false);
+  assert.ok(logs.some((l) => l.includes('diff is empty')));
+});
+
 test('logVerboseRunnerOutput prints stdout, stderr, and response file', () => {
   const lines: string[] = [];
   logVerboseRunnerOutput(
