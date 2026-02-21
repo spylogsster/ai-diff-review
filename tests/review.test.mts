@@ -334,6 +334,8 @@ test('runReview uses verbose branch and forwards verbose to reviewers', async ()
 test('runReview skips reviewers and alerts when diff is empty string', async () => {
   const logs: string[] = [];
   let claudeCalled = false;
+  let codexCalled = false;
+  let copilotCalled = false;
 
   const result = await runReview(
     '/tmp/repo',
@@ -342,8 +344,8 @@ test('runReview skips reviewers and alerts when diff is empty string', async () 
       getStagedDiff: () => '',
       buildPrompt: () => 'PROMPT',
       runClaude: () => { claudeCalled = true; return Promise.resolve({ available: false }); },
-      runCodex: () => { return Promise.resolve({ available: false }); },
-      runCopilot: () => { return Promise.resolve({ available: false }); },
+      runCodex: () => { codexCalled = true; return Promise.resolve({ available: false }); },
+      runCopilot: () => { copilotCalled = true; return Promise.resolve({ available: false }); },
       writeReport: () => {},
       log: (line) => { logs.push(line); },
     },
@@ -352,12 +354,16 @@ test('runReview skips reviewers and alerts when diff is empty string', async () 
   assert.equal(result.pass, true);
   assert.equal(result.reason, 'Empty diff.');
   assert.equal(claudeCalled, false);
+  assert.equal(codexCalled, false);
+  assert.equal(copilotCalled, false);
   assert.ok(logs.some((l) => l.includes('diff is empty')));
 });
 
 test('runReview skips reviewers and alerts when diff is whitespace-only', async () => {
   const logs: string[] = [];
   let claudeCalled = false;
+  let codexCalled = false;
+  let copilotCalled = false;
 
   const result = await runReview(
     '/tmp/repo',
@@ -366,8 +372,8 @@ test('runReview skips reviewers and alerts when diff is whitespace-only', async 
       getStagedDiff: () => '   \n  \n  ',
       buildPrompt: () => 'PROMPT',
       runClaude: () => { claudeCalled = true; return Promise.resolve({ available: false }); },
-      runCodex: () => { return Promise.resolve({ available: false }); },
-      runCopilot: () => { return Promise.resolve({ available: false }); },
+      runCodex: () => { codexCalled = true; return Promise.resolve({ available: false }); },
+      runCopilot: () => { copilotCalled = true; return Promise.resolve({ available: false }); },
       writeReport: () => {},
       log: (line) => { logs.push(line); },
     },
@@ -376,6 +382,8 @@ test('runReview skips reviewers and alerts when diff is whitespace-only', async 
   assert.equal(result.pass, true);
   assert.equal(result.reason, 'Empty diff.');
   assert.equal(claudeCalled, false);
+  assert.equal(codexCalled, false);
+  assert.equal(copilotCalled, false);
   assert.ok(logs.some((l) => l.includes('diff is empty')));
 });
 
