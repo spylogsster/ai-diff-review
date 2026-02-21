@@ -12,7 +12,7 @@ import { buildAgentsContext, resolvePromptHeaderLines } from './prompt.js';
 import { getGitPath, git } from './git.js';
 
 const COPILOT_MODEL = process.env.COPILOT_REVIEW_MODEL || 'gpt-5.3-codex';
-const TIMEOUT_MS = Number(process.env.AI_REVIEW_TIMEOUT_MS || 300000);
+const TIMEOUT_MS = Number(process.env.AI_REVIEW_TIMEOUT_MS || 60000);
 const PREFLIGHT_TIMEOUT_SEC = Number(process.env.AI_REVIEW_PREFLIGHT_TIMEOUT_SEC || 8);
 
 export type ReviewerName = 'codex' | 'copilot' | 'claude';
@@ -321,7 +321,7 @@ function spawnClaude(
     child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
     child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
-    child.on('error', (err) => {
+    child.on('error', (err: Error) => {
       if (!settled) {
         settled = true;
         clearTimeout(timer);
@@ -329,7 +329,7 @@ function spawnClaude(
       }
     });
 
-    child.on('close', (code) => {
+    child.on('close', (code: number | null) => {
       if (!settled) {
         settled = true;
         clearTimeout(timer);
@@ -360,7 +360,6 @@ async function runClaude(prompt: string, verbose: boolean, skipPreflight = false
       '--output-format', 'json',
       '--no-session-persistence',
       '--max-turns', '1',
-      '--allowedTools', '',
     ];
 
     if (verbose) {
