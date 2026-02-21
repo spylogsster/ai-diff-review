@@ -600,9 +600,9 @@ export async function runReview(
   };
 
   const diff = runtimeDeps.getStagedDiff();
-  if (!diff) {
-    runtimeDeps.log('AI review: no staged changes.');
-    return { pass: true, reportPath: resolve(cwd, getGitPath('ai-review-last.json')), reason: 'No staged changes.' };
+  if (!diff || !diff.trim()) {
+    runtimeDeps.log('AI review: diff is empty — nothing to review.');
+    return { pass: true, reportPath: resolve(cwd, getGitPath('ai-review-last.json')), reason: 'Empty diff.' };
   }
 
   const prompt = runtimeDeps.buildPrompt(diff, cwd);
