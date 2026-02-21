@@ -12,6 +12,13 @@ All contributors and AI agents must follow these rules.
 - The package must remain reusable across arbitrary repositories.
 - Avoid repo-specific assumptions except for explicit `AGENTS.md`-based policy loading.
 
+## Project Structure
+
+- Maintain a tree-based architecture: logically related modules, scripts, files, and resources must be grouped into dedicated directories and subdirectories.
+- Do not mix logically unrelated scripts or modules in the same directory.
+- When files share a common domain or feature, create a subdirectory for them.
+- Merge directories that serve the same logical purpose; split directories that contain unrelated concerns.
+
 ## Architecture Rules
 
 - Keep logic modular by domain:
