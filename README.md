@@ -68,7 +68,9 @@ Recommended: install multiple for resilient fallback behavior.
 
 When an API token env var is set, the network preflight check for that reviewer is skipped — this is useful in CI environments or when interactive OAuth login is not available.
 
-Default fallback chain: Codex → Copilot → Claude. If all are unavailable, review fails.
+Default fallback chain: Codex → Copilot → Claude. If a provider was unavailable on the previous run, it is rotated to the end of the chain on the next attempt (state stored in `.git/ai-review-last-unavailable`, cleared on success). If all are unavailable, review fails.
+
+When a reviewer is explicitly selected via `--claude`, `--codex`, or `--copilot`, the preflight check is skipped entirely — the CLI tool handles its own authentication.
 
 ## Install in another repository
 
@@ -149,6 +151,7 @@ In each target repository:
 
 - In CI (`CI=true|1|yes`) pre-commit review is skipped.
 - Report is written to `.git/ai-review-last.json` by default.
+- Last-unavailable provider state: `.git/ai-review-last-unavailable` (used for fallback rotation).
 - Failure counter file: `.git/ai-review-fail-count`.
 - Lock file after repeated failures: `.git/ai-review.lock`.
 - Unlock manually by removing lock and fail-count files.

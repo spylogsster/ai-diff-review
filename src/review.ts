@@ -15,6 +15,47 @@ const COPILOT_MODEL = process.env.COPILOT_REVIEW_MODEL || 'gpt-5.3-codex';
 const TIMEOUT_MS = Number(process.env.AI_REVIEW_TIMEOUT_MS || 300000);
 const PREFLIGHT_TIMEOUT_SEC = Number(process.env.AI_REVIEW_PREFLIGHT_TIMEOUT_SEC || 8);
 
+export type ReviewerName = 'codex' | 'copilot' | 'claude';
+const DEFAULT_FALLBACK_ORDER: ReadonlyArray<ReviewerName> = ['codex', 'copilot', 'claude'];
+
+export function buildFallbackOrder(lastUnavailable: string | null): ReviewerName[] {
+  if (!lastUnavailable || !DEFAULT_FALLBACK_ORDER.includes(lastUnavailable as ReviewerName)) {
+    return [...DEFAULT_FALLBACK_ORDER];
+  }
+  const order = DEFAULT_FALLBACK_ORDER.filter((r) => r !== lastUnavailable);
+  order.push(lastUnavailable as ReviewerName);
+  return order;
+}
+
+export function readLastUnavailable(cwd: string): string | null {
+  try {
+    const filePath = resolve(cwd, getGitPath('ai-review-last-unavailable'));
+    if (!existsSync(filePath)) return null;
+    const value = readFileSync(filePath, 'utf8').trim();
+    return value || null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeLastUnavailable(cwd: string, reviewer: string): void {
+  const filePath = resolve(cwd, getGitPath('ai-review-last-unavailable'));
+  try {
+    writeFileSync(filePath, reviewer, 'utf8');
+  } catch {
+    console.error(`Warning: could not write last-unavailable state to ${filePath}`);
+  }
+}
+
+export function clearLastUnavailable(cwd: string): void {
+  const filePath = resolve(cwd, getGitPath('ai-review-last-unavailable'));
+  try {
+    rmSync(filePath, { force: true });
+  } catch {
+    console.error(`Warning: could not clear last-unavailable state at ${filePath}`);
+  }
+}
+
 export interface RunReviewOptions {
   verbose?: boolean;
   reviewer?: 'claude' | 'codex' | 'copilot';
@@ -23,9 +64,9 @@ export interface RunReviewOptions {
 export interface RunReviewDeps {
   getStagedDiff: () => string;
   buildPrompt: (diff: string, cwd: string) => string;
-  runClaude: (prompt: string, verbose: boolean) => Promise<ReviewRunnerResult>;
-  runCodex: (prompt: string, verbose: boolean) => Promise<ReviewRunnerResult>;
-  runCopilot: (prompt: string, verbose: boolean) => Promise<ReviewRunnerResult>;
+  runClaude: (prompt: string, verbose: boolean, skipPreflight?: boolean) => Promise<ReviewRunnerResult>;
+  runCodex: (prompt: string, verbose: boolean, skipPreflight?: boolean) => Promise<ReviewRunnerResult>;
+  runCopilot: (prompt: string, verbose: boolean, skipPreflight?: boolean) => Promise<ReviewRunnerResult>;
   writeReport: (reportPath: string, report: ReviewReport) => void;
   log: (message: string) => void;
 }
@@ -302,14 +343,14 @@ function spawnClaude(
   });
 }
 
-async function runClaude(prompt: string, verbose: boolean): Promise<ReviewRunnerResult> {
+async function runClaude(prompt: string, verbose: boolean, skipPreflight = false): Promise<ReviewRunnerResult> {
   const claude = resolveBinary('CLAUDE_BIN', ['claude']);
   if (!claude) {
     console.error('Claude: binary not found in PATH (or CLAUDE_BIN not set) — skipping.');
     return { available: false };
   }
 
-  if (!checkPreflight('Claude', 'ANTHROPIC_API_KEY', ['https://api.anthropic.com'], verbose)) {
+  if (!skipPreflight && !checkPreflight('Claude', 'ANTHROPIC_API_KEY', ['https://api.anthropic.com'], verbose)) {
     return { available: false };
   }
 
@@ -371,14 +412,14 @@ async function runClaude(prompt: string, verbose: boolean): Promise<ReviewRunner
   }
 }
 
-function runCodex(prompt: string, verbose: boolean): ReviewRunnerResult {
+function runCodex(prompt: string, verbose: boolean, skipPreflight = false): ReviewRunnerResult {
   const codex = resolveBinary('CODEX_BIN', ['codex']);
   if (!codex) {
     console.error('Codex: binary not found in PATH (or CODEX_BIN not set) — skipping.');
     return { available: false };
   }
 
-  if (!checkPreflight('Codex', 'OPENAI_API_KEY', ['https://api.openai.com/v1/models', 'https://chatgpt.com'], verbose)) {
+  if (!skipPreflight && !checkPreflight('Codex', 'OPENAI_API_KEY', ['https://api.openai.com/v1/models', 'https://chatgpt.com'], verbose)) {
     return { available: false };
   }
 
@@ -439,14 +480,14 @@ function runCodex(prompt: string, verbose: boolean): ReviewRunnerResult {
   }
 }
 
-function runCopilot(prompt: string, verbose: boolean): ReviewRunnerResult {
+function runCopilot(prompt: string, verbose: boolean, skipPreflight = false): ReviewRunnerResult {
   const copilot = resolveBinary('COPILOT_BIN', ['copilot']);
   if (!copilot) {
     console.error('Copilot: binary not found in PATH (or COPILOT_BIN not set) — skipping.');
     return { available: false };
   }
 
-  if (!checkPreflight('Copilot', 'GITHUB_TOKEN', ['https://api.github.com'], verbose)) {
+  if (!skipPreflight && !checkPreflight('Copilot', 'GITHUB_TOKEN', ['https://api.github.com'], verbose)) {
     return { available: false };
   }
 
@@ -549,8 +590,8 @@ export async function runReview(
     getStagedDiff,
     buildPrompt,
     runClaude,
-    runCodex: (p, v) => Promise.resolve(runCodex(p, v)),
-    runCopilot: (p, v) => Promise.resolve(runCopilot(p, v)),
+    runCodex: (p, v, s) => Promise.resolve(runCodex(p, v, s)),
+    runCopilot: (p, v, s) => Promise.resolve(runCopilot(p, v, s)),
     writeReport: (reportPath, report) => {
       writeFileSync(reportPath, JSON.stringify(report, null, 2), 'utf8');
     },
@@ -578,23 +619,50 @@ export async function runReview(
 
   if (reviewer === 'claude') {
     runtimeDeps.log('Running Claude review (--claude)...');
-    claude = await runtimeDeps.runClaude(prompt, verbose);
+    claude = await runtimeDeps.runClaude(prompt, verbose, true);
   } else if (reviewer === 'copilot') {
     runtimeDeps.log('Running Copilot review (--copilot)...');
-    copilot = await runtimeDeps.runCopilot(prompt, verbose);
+    copilot = await runtimeDeps.runCopilot(prompt, verbose, true);
   } else if (reviewer === 'codex') {
     runtimeDeps.log('Running Codex review (--codex)...');
-    codex = await runtimeDeps.runCodex(prompt, verbose);
+    codex = await runtimeDeps.runCodex(prompt, verbose, true);
   } else {
-    runtimeDeps.log('Running Codex review...');
-    codex = await runtimeDeps.runCodex(prompt, verbose);
-    if (!codex.available) {
-      runtimeDeps.log('Codex unavailable — falling back to Copilot review...');
-      copilot = await runtimeDeps.runCopilot(prompt, verbose);
-      if (!copilot.available) {
-        runtimeDeps.log('Copilot unavailable — falling back to Claude review...');
-        claude = await runtimeDeps.runClaude(prompt, verbose);
+    const lastUnavailable = readLastUnavailable(cwd);
+    const fallbackOrder = buildFallbackOrder(lastUnavailable);
+
+    const runners: Record<ReviewerName, (p: string, v: boolean, s?: boolean) => Promise<ReviewRunnerResult>> = {
+      codex: runtimeDeps.runCodex,
+      copilot: runtimeDeps.runCopilot,
+      claude: runtimeDeps.runClaude,
+    };
+    const results: Record<ReviewerName, ReviewRunnerResult> = {
+      codex: { available: false },
+      copilot: { available: false },
+      claude: { available: false },
+    };
+    const labels: Record<ReviewerName, string> = { codex: 'Codex', copilot: 'Copilot', claude: 'Claude' };
+
+    let firstUnavailable: ReviewerName | null = null;
+    for (let i = 0; i < fallbackOrder.length; i++) {
+      const name = fallbackOrder[i];
+      if (i === 0) {
+        runtimeDeps.log(`Running ${labels[name]} review...`);
+      } else {
+        runtimeDeps.log(`${labels[fallbackOrder[i - 1]]} unavailable — falling back to ${labels[name]} review...`);
       }
+      results[name] = await runners[name](prompt, verbose);
+      if (results[name].available) break;
+      if (!firstUnavailable) firstUnavailable = name;
+    }
+
+    claude = results.claude;
+    codex = results.codex;
+    copilot = results.copilot;
+
+    if (firstUnavailable) {
+      writeLastUnavailable(cwd, firstUnavailable);
+    } else {
+      clearLastUnavailable(cwd);
     }
   }
 

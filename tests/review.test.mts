@@ -3,7 +3,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -19,6 +19,10 @@ import {
   runReview,
   hasApiToken,
   checkPreflight,
+  buildFallbackOrder,
+  readLastUnavailable,
+  writeLastUnavailable,
+  clearLastUnavailable,
 } from '../src/review.ts';
 import {
   extractReferencedMarkdownFiles,
@@ -657,6 +661,163 @@ test('buildPrompt uses default Staged diff label when no diffLabel provided', ()
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('buildFallbackOrder returns default order when no last unavailable', () => {
+  assert.deepEqual(buildFallbackOrder(null), ['codex', 'copilot', 'claude']);
+  assert.deepEqual(buildFallbackOrder(''), ['codex', 'copilot', 'claude']);
+  assert.deepEqual(buildFallbackOrder('unknown'), ['codex', 'copilot', 'claude']);
+});
+
+test('buildFallbackOrder rotates codex to end', () => {
+  assert.deepEqual(buildFallbackOrder('codex'), ['copilot', 'claude', 'codex']);
+});
+
+test('buildFallbackOrder rotates copilot to end', () => {
+  assert.deepEqual(buildFallbackOrder('copilot'), ['codex', 'claude', 'copilot']);
+});
+
+test('buildFallbackOrder rotates claude to end', () => {
+  assert.deepEqual(buildFallbackOrder('claude'), ['codex', 'copilot', 'claude']);
+});
+
+test('readLastUnavailable returns null when file does not exist', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ai-review-test-'));
+  try {
+    assert.equal(readLastUnavailable(tempDir), null);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('writeLastUnavailable and readLastUnavailable round-trip', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ai-review-test-'));
+  mkdirSync(join(tempDir, '.git'), { recursive: true });
+  try {
+    writeLastUnavailable(tempDir, 'codex');
+    assert.equal(readLastUnavailable(tempDir), 'codex');
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('clearLastUnavailable removes the file', () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ai-review-test-'));
+  mkdirSync(join(tempDir, '.git'), { recursive: true });
+  try {
+    writeLastUnavailable(tempDir, 'copilot');
+    assert.equal(readLastUnavailable(tempDir), 'copilot');
+    clearLastUnavailable(tempDir);
+    assert.equal(readLastUnavailable(tempDir), null);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('runReview default fallback rotates based on last-unavailable file', async () => {
+  const callOrder: string[] = [];
+  const tempDir = mkdtempSync(join(tmpdir(), 'ai-review-test-'));
+  mkdirSync(join(tempDir, '.git'), { recursive: true });
+
+  // Write codex as last unavailable
+  writeLastUnavailable(tempDir, 'codex');
+
+  try {
+    await runReview(
+      tempDir,
+      {},
+      {
+        getStagedDiff: () => 'diff --cached',
+        buildPrompt: () => 'PROMPT',
+        runClaude: () => {
+          callOrder.push('claude');
+          return Promise.resolve({ available: false });
+        },
+        runCodex: () => {
+          callOrder.push('codex');
+          return Promise.resolve({ available: false });
+        },
+        runCopilot: () => {
+          callOrder.push('copilot');
+          return Promise.resolve({ available: true, result: PASS_RESULT });
+        },
+        writeReport: () => {},
+        log: () => {},
+      },
+    );
+
+    // Copilot should be tried first (codex rotated to end)
+    assert.equal(callOrder[0], 'copilot');
+    assert.equal(callOrder.length, 1);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('runReview with explicit reviewer passes skipPreflight=true to runner', async () => {
+  const preflightArgs: Record<string, boolean | undefined> = {};
+
+  const makeDeps = (reviewer: 'claude' | 'codex' | 'copilot') => ({
+    getStagedDiff: () => 'diff --cached',
+    buildPrompt: () => 'PROMPT',
+    runClaude: (_p: string, _v: boolean, skip?: boolean) => {
+      preflightArgs.claude = skip;
+      return Promise.resolve({ available: true, result: PASS_RESULT } as const);
+    },
+    runCodex: (_p: string, _v: boolean, skip?: boolean) => {
+      preflightArgs.codex = skip;
+      return Promise.resolve({ available: true, result: PASS_RESULT } as const);
+    },
+    runCopilot: (_p: string, _v: boolean, skip?: boolean) => {
+      preflightArgs.copilot = skip;
+      return Promise.resolve({ available: true, result: PASS_RESULT } as const);
+    },
+    writeReport: () => {},
+    log: () => {},
+  });
+
+  preflightArgs.claude = undefined;
+  await runReview('/tmp/repo', { reviewer: 'claude' }, makeDeps('claude'));
+  assert.equal(preflightArgs.claude, true, '--claude should pass skipPreflight=true');
+
+  preflightArgs.codex = undefined;
+  await runReview('/tmp/repo', { reviewer: 'codex' }, makeDeps('codex'));
+  assert.equal(preflightArgs.codex, true, '--codex should pass skipPreflight=true');
+
+  preflightArgs.copilot = undefined;
+  await runReview('/tmp/repo', { reviewer: 'copilot' }, makeDeps('copilot'));
+  assert.equal(preflightArgs.copilot, true, '--copilot should pass skipPreflight=true');
+});
+
+test('runReview default fallback does not pass skipPreflight to runners', async () => {
+  const preflightArgs: Record<string, boolean | undefined> = {};
+
+  await runReview(
+    '/tmp/repo',
+    {},
+    {
+      getStagedDiff: () => 'diff --cached',
+      buildPrompt: () => 'PROMPT',
+      runClaude: (_p, _v, skip) => {
+        preflightArgs.claude = skip;
+        return Promise.resolve({ available: true, result: PASS_RESULT });
+      },
+      runCodex: (_p, _v, skip) => {
+        preflightArgs.codex = skip;
+        return Promise.resolve({ available: false });
+      },
+      runCopilot: (_p, _v, skip) => {
+        preflightArgs.copilot = skip;
+        return Promise.resolve({ available: false });
+      },
+      writeReport: () => {},
+      log: () => {},
+    },
+  );
+
+  assert.equal(preflightArgs.codex, undefined, 'default chain should not pass skipPreflight');
+  assert.equal(preflightArgs.copilot, undefined, 'default chain should not pass skipPreflight');
+  assert.equal(preflightArgs.claude, undefined, 'default chain should not pass skipPreflight');
 });
 
 test('checkPreflight logs token usage only in verbose mode', () => {
