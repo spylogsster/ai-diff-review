@@ -23,6 +23,8 @@ import {
   readLastUnavailable,
   writeLastUnavailable,
   clearLastUnavailable,
+  extractTokenUsage,
+  extractTokenUsageFromText,
 } from '../src/review.ts';
 import {
   extractReferencedMarkdownFiles,
@@ -980,4 +982,47 @@ test('checkPreflight logs token usage only in verbose mode', () => {
     if (saved === undefined) delete process.env.ANTHROPIC_API_KEY;
     else process.env.ANTHROPIC_API_KEY = saved;
   }
+});
+
+test('extractTokenUsage extracts valid usage object', () => {
+  const usage = extractTokenUsage({ input_tokens: 100, output_tokens: 50 });
+  assert.deepEqual(usage, { input_tokens: 100, output_tokens: 50 });
+});
+
+test('extractTokenUsage returns undefined for null/undefined/non-object', () => {
+  assert.equal(extractTokenUsage(null), undefined);
+  assert.equal(extractTokenUsage(undefined), undefined);
+  assert.equal(extractTokenUsage('string'), undefined);
+  assert.equal(extractTokenUsage(42), undefined);
+});
+
+test('extractTokenUsage returns undefined when no numeric token fields', () => {
+  assert.equal(extractTokenUsage({ input_tokens: 'not a number' }), undefined);
+  assert.equal(extractTokenUsage({}), undefined);
+});
+
+test('extractTokenUsage handles partial usage (only input)', () => {
+  const usage = extractTokenUsage({ input_tokens: 200 });
+  assert.deepEqual(usage, { input_tokens: 200, output_tokens: undefined });
+});
+
+test('extractTokenUsage handles partial usage (only output)', () => {
+  const usage = extractTokenUsage({ output_tokens: 75 });
+  assert.deepEqual(usage, { input_tokens: undefined, output_tokens: 75 });
+});
+
+test('extractTokenUsageFromText extracts from JSON fragment', () => {
+  const text = 'some log\n{"input_tokens": 500, "output_tokens": 120}\nmore log';
+  const usage = extractTokenUsageFromText(text);
+  assert.deepEqual(usage, { input_tokens: 500, output_tokens: 120 });
+});
+
+test('extractTokenUsageFromText returns undefined for text without token data', () => {
+  assert.equal(extractTokenUsageFromText('no tokens here'), undefined);
+  assert.equal(extractTokenUsageFromText(''), undefined);
+});
+
+test('extractTokenUsageFromText does not combine matches from separate objects', () => {
+  const text = '{"input_tokens": 100}\n{"output_tokens": 200}';
+  assert.equal(extractTokenUsageFromText(text), undefined);
 });

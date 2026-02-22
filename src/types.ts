@@ -15,9 +15,14 @@ export interface ParsedReview {
   findings: ReviewFinding[];
 }
 
+export interface TokenUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+}
+
 export type ReviewRunnerResult =
   | { available: false }
-  | { available: true; result: ParsedReview };
+  | { available: true; result: ParsedReview; usage?: TokenUsage };
 
 export interface ReviewReport {
   claude: ParsedReview | { status: 'unavailable' };

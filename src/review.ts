@@ -7,7 +7,7 @@ import { platform, tmpdir } from 'node:os';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { REVIEW_SCHEMA } from './schema.js';
-import type { ParsedReview, ReviewReport, ReviewRunnerResult } from './types.js';
+import type { ParsedReview, ReviewReport, ReviewRunnerResult, TokenUsage } from './types.js';
 import { buildAgentsContext, resolvePromptHeaderLines } from './prompt.js';
 import { getGitPath, git } from './git.js';
 
@@ -250,6 +250,23 @@ function validateParsedReview(parsed: unknown): ParsedReview {
   return parsed as ParsedReview;
 }
 
+export function extractTokenUsage(usage: unknown): TokenUsage | undefined {
+  if (!usage || typeof usage !== 'object') return undefined;
+  const u = usage as Record<string, unknown>;
+  const input = typeof u.input_tokens === 'number' ? u.input_tokens : undefined;
+  const output = typeof u.output_tokens === 'number' ? u.output_tokens : undefined;
+  if (input === undefined && output === undefined) return undefined;
+  return { input_tokens: input, output_tokens: output };
+}
+
+export function extractTokenUsageFromText(text: string): TokenUsage | undefined {
+  // Find a JSON object that contains both input_tokens and output_tokens as siblings
+  const objectPattern = /\{[^{}]*"input_tokens"\s*:\s*(\d+)[^{}]*"output_tokens"\s*:\s*(\d+)[^{}]*\}/;
+  const match = text.match(objectPattern);
+  if (!match) return undefined;
+  return { input_tokens: Number(match[1]), output_tokens: Number(match[2]) };
+}
+
 export function parseSubagentOutput(raw: string): ParsedReview {
   const trimmed = String(raw || '').trim();
   if (!trimmed) {
@@ -395,16 +412,18 @@ async function runClaude(prompt: string, verbose: boolean, skipPreflight = false
     }
 
     let reviewPayload = trimmed;
+    let usage: TokenUsage | undefined;
     try {
       const envelope = JSON.parse(trimmed);
       if (envelope && typeof envelope === 'object' && typeof envelope.result === 'string') {
         reviewPayload = envelope.result;
+        usage = extractTokenUsage(envelope.usage);
       }
     } catch {
       // not an envelope — use raw output
     }
 
-    return { available: true, result: parseSubagentOutput(reviewPayload) };
+    return { available: true, result: parseSubagentOutput(reviewPayload), usage };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Claude: ${message} — skipping.`);
@@ -470,7 +489,8 @@ function runCodex(prompt: string, verbose: boolean, skipPreflight = false): Revi
       return { available: false };
     }
 
-    return { available: true, result: parseSubagentOutput(readFileSync(resultPath, 'utf8')) };
+    const usage = extractTokenUsageFromText(run.stdout || '');
+    return { available: true, result: parseSubagentOutput(readFileSync(resultPath, 'utf8')), usage };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Codex: ${message} — skipping.`);
@@ -524,7 +544,8 @@ function runCopilot(prompt: string, verbose: boolean, skipPreflight = false): Re
       return { available: false };
     }
 
-    return { available: true, result: parseSubagentOutput(stdout) };
+    const usage = extractTokenUsageFromText(run.stderr || '');
+    return { available: true, result: parseSubagentOutput(stdout), usage };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`Copilot: ${message} — skipping.`);
@@ -562,7 +583,7 @@ export function evaluateResults(claude: ReviewRunnerResult, codex: ReviewRunnerR
   return { pass: true, reason: `AI review approved by: ${passed.join(', ')}.` };
 }
 
-function printReview(model: string, result: ParsedReview): void {
+function printReview(model: string, result: ParsedReview, usage?: TokenUsage): void {
   const label = result.status === 'fail'
     ? `${model} review FAILED`
     : result.findings.length > 0
@@ -576,6 +597,13 @@ function printReview(model: string, result: ParsedReview): void {
     const at = finding.file ? `${finding.file}${finding.line ? `:${finding.line}` : ''}` : 'n/a';
     console.log(`- [${finding.severity}] ${finding.title} (${at})`);
     console.log(`  ${finding.details}`);
+  }
+
+  if (usage) {
+    const parts: string[] = [];
+    if (usage.input_tokens !== undefined) parts.push(`input: ${usage.input_tokens}`);
+    if (usage.output_tokens !== undefined) parts.push(`output: ${usage.output_tokens}`);
+    if (parts.length > 0) console.log(`Tokens: ${parts.join(', ')}`);
   }
 }
 
@@ -677,17 +705,17 @@ export async function runReview(
   runtimeDeps.log(`AI review raw report saved: ${reportPath}`);
 
   if (claude.available) {
-    printReview('Claude', claude.result);
+    printReview('Claude', claude.result, claude.usage);
   } else {
     console.log('\nClaude: unavailable — skipped.');
   }
   if (codex.available) {
-    printReview('Codex', codex.result);
+    printReview('Codex', codex.result, codex.usage);
   } else {
     console.log('\nCodex: unavailable — skipped.');
   }
   if (copilot.available) {
-    printReview('Copilot', copilot.result);
+    printReview('Copilot', copilot.result, copilot.usage);
   } else {
     console.log('\nCopilot: unavailable — skipped.');
   }
