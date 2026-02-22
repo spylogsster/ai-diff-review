@@ -810,6 +810,87 @@ test('runReview default fallback rotates based on last-unavailable file', async 
   }
 });
 
+test('runReview preserves last-unavailable state when rotated reviewer is not retried', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ai-review-test-'));
+  mkdirSync(join(tempDir, '.git'), { recursive: true });
+
+  // Simulate: codex was unavailable last run, so it's rotated to end
+  writeLastUnavailable(tempDir, 'codex');
+
+  try {
+    // Run 1: copilot is first (due to rotation) and succeeds immediately — codex is never tried
+    await runReview(
+      tempDir,
+      {},
+      {
+        getStagedDiff: () => 'diff --cached',
+        buildPrompt: () => 'PROMPT',
+        runClaude: () => Promise.resolve({ available: false }),
+        runCodex: () => Promise.resolve({ available: false }),
+        runCopilot: () => Promise.resolve({ available: true, result: PASS_RESULT }),
+        writeReport: () => {},
+        log: () => {},
+      },
+    );
+
+    // State should be preserved because codex was never retried
+    assert.equal(readLastUnavailable(tempDir), 'codex',
+      'last-unavailable state should persist when the rotated reviewer was not retried');
+
+    // Run 2: copilot should still be first (rotation preserved)
+    const callOrder: string[] = [];
+    await runReview(
+      tempDir,
+      {},
+      {
+        getStagedDiff: () => 'diff --cached',
+        buildPrompt: () => 'PROMPT',
+        runClaude: () => { callOrder.push('claude'); return Promise.resolve({ available: false }); },
+        runCodex: () => { callOrder.push('codex'); return Promise.resolve({ available: false }); },
+        runCopilot: () => { callOrder.push('copilot'); return Promise.resolve({ available: true, result: PASS_RESULT }); },
+        writeReport: () => {},
+        log: () => {},
+      },
+    );
+
+    assert.equal(callOrder[0], 'copilot', 'copilot should still be first on consecutive runs');
+    assert.equal(callOrder.length, 1, 'should stop after first available reviewer');
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('runReview updates last-unavailable to new first failure when rotated reviewer succeeds', async () => {
+  const tempDir = mkdtempSync(join(tmpdir(), 'ai-review-test-'));
+  mkdirSync(join(tempDir, '.git'), { recursive: true });
+
+  // codex was last unavailable → order becomes ['copilot', 'claude', 'codex']
+  writeLastUnavailable(tempDir, 'codex');
+
+  try {
+    // copilot and claude fail, codex (rotated to end) succeeds
+    await runReview(
+      tempDir,
+      {},
+      {
+        getStagedDiff: () => 'diff --cached',
+        buildPrompt: () => 'PROMPT',
+        runClaude: () => Promise.resolve({ available: false }),
+        runCopilot: () => Promise.resolve({ available: false }),
+        runCodex: () => Promise.resolve({ available: true, result: PASS_RESULT }),
+        writeReport: () => {},
+        log: () => {},
+      },
+    );
+
+    // State should now reflect copilot as the first unavailable (not codex anymore)
+    assert.equal(readLastUnavailable(tempDir), 'copilot',
+      'last-unavailable state should update to the new first failure');
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('runReview with explicit reviewer passes skipPreflight=true to runner', async () => {
   const preflightArgs: Record<string, boolean | undefined> = {};
 

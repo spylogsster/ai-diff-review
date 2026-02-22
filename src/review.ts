@@ -661,7 +661,7 @@ export async function runReview(
 
     if (firstUnavailable) {
       writeLastUnavailable(cwd, firstUnavailable);
-    } else {
+    } else if (!lastUnavailable || !DEFAULT_FALLBACK_ORDER.includes(lastUnavailable as ReviewerName) || results[lastUnavailable as ReviewerName].available) {
       clearLastUnavailable(cwd);
     }
   }
