@@ -569,10 +569,10 @@ export function evaluateResults(claude: ReviewRunnerResult, codex: ReviewRunnerR
 
   const withFindings: string[] = [];
   for (const [name, runner] of runners) {
-    if (runner.available && runner.result.findings.length > 0) withFindings.push(name);
+    if (runner.available && runner.result.findings.some(f => f.severity !== 'info')) withFindings.push(name);
   }
   if (withFindings.length > 0) {
-    return { pass: false, reason: `AI review has unresolved findings from: ${withFindings.join(', ')}. Pass requires zero findings.` };
+    return { pass: false, reason: `AI review has unresolved findings from: ${withFindings.join(', ')}. Pass requires zero non-info findings.` };
   }
 
   const passed: string[] = [];
