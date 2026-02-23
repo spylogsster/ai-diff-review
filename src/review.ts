@@ -376,7 +376,6 @@ async function runClaude(prompt: string, verbose: boolean, skipPreflight = false
       '--print',
       '--output-format', 'json',
       '--no-session-persistence',
-      '--max-turns', process.env.CLAUDE_MAX_TURNS || '2',
       '--allowedTools', '',
     ];
 
