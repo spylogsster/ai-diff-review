@@ -164,6 +164,7 @@ In each target repository:
 - `CODEX_BIN`: custom Codex executable path/name.
 - `COPILOT_BIN`: custom Copilot executable path/name.
 - `CLAUDE_BIN`: custom Claude executable path/name.
+- `CLAUDE_MAX_TURNS`: max agentic turns for Claude CLI; default `2`.
 - `COPILOT_REVIEW_MODEL`: default `gpt-5.3-codex`.
 - `AI_REVIEW_TIMEOUT_MS`: default `300000` (5 min).
 - `AI_REVIEW_PREFLIGHT_TIMEOUT_SEC`: default `8`.
