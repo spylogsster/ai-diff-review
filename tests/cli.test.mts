@@ -3,7 +3,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { hasVerboseFlag, hasClaudeFlag, hasCodexFlag, hasCopilotFlag, runCli, type CliDeps } from '../src/cli.ts';
+import { hasVerboseFlag, hasClaudeFlag, hasCodexFlag, hasCopilotFlag, hasAllReviewersFlag, runCli, type CliDeps } from '../src/cli.ts';
 
 function makeDeps() {
   const calls = {
@@ -63,6 +63,20 @@ test('hasCodexFlag detects --codex option', () => {
 test('hasCopilotFlag detects --copilot option', () => {
   assert.equal(hasCopilotFlag(['review', '--copilot']), true);
   assert.equal(hasCopilotFlag(['review']), false);
+});
+
+test('hasAllReviewersFlag detects --all-reviewers option', () => {
+  assert.equal(hasAllReviewersFlag(['review', '--all-reviewers']), true);
+  assert.equal(hasAllReviewersFlag(['review']), false);
+});
+
+test('runCli rejects --all-reviewers combined with --claude', async () => {
+  const { deps } = makeDeps();
+  const logs: string[] = [];
+  deps.log = (m) => logs.push(m);
+  const code = await runCli(['review', '--all-reviewers', '--claude'], deps);
+  assert.equal(code, 1);
+  assert.ok(logs.some((l) => l.includes('cannot be combined')));
 });
 
 test('runCli passes reviewer=codex to review command', async () => {

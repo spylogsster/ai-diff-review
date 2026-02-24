@@ -59,6 +59,7 @@ export function clearLastUnavailable(cwd: string): void {
 export interface RunReviewOptions {
   verbose?: boolean;
   reviewer?: 'claude' | 'codex' | 'copilot';
+  allReviewers?: boolean;
 }
 
 export interface RunReviewDeps {
@@ -613,6 +614,12 @@ export async function runReview(
 ): Promise<{ pass: boolean; reportPath: string; reason: string }> {
   const verbose = options.verbose === true;
   const reviewer = options.reviewer;
+  const allReviewers = options.allReviewers === true;
+  const verboseLogPath = verbose ? resolve(cwd, getGitPath('ai-review-verbose.log')) : null;
+  const verboseLines: string[] = [];
+  const appendVerbose = (line: string): void => {
+    if (verbose) verboseLines.push(line);
+  };
   const runtimeDeps: RunReviewDeps = {
     getStagedDiff,
     buildPrompt,
@@ -635,6 +642,9 @@ export async function runReview(
   const prompt = runtimeDeps.buildPrompt(diff, cwd);
 
   if (verbose) {
+    appendVerbose(`[${new Date().toISOString()}] ----- REVIEW PROMPT (FULL) -----`);
+    appendVerbose(prompt);
+    appendVerbose('----- END REVIEW PROMPT -----\n');
     runtimeDeps.log('----- REVIEW PROMPT (FULL) -----');
     runtimeDeps.log(prompt);
     runtimeDeps.log('----- END REVIEW PROMPT -----');
@@ -653,6 +663,28 @@ export async function runReview(
   } else if (reviewer === 'codex') {
     runtimeDeps.log('Running Codex review (--codex)...');
     codex = await runtimeDeps.runCodex(prompt, verbose, true);
+  } else if (allReviewers) {
+    const runners: Array<[ReviewerName, string, (p: string, v: boolean, s?: boolean) => Promise<ReviewRunnerResult>]> = [
+      ['codex', 'Codex', runtimeDeps.runCodex],
+      ['copilot', 'Copilot', runtimeDeps.runCopilot],
+      ['claude', 'Claude', runtimeDeps.runClaude],
+    ];
+    const results: Record<ReviewerName, ReviewRunnerResult> = {
+      codex: { available: false },
+      copilot: { available: false },
+      claude: { available: false },
+    };
+
+    for (const [name, label, runner] of runners) {
+      runtimeDeps.log(`Running ${label} review...`);
+      appendVerbose(`[${new Date().toISOString()}] Running ${label} review...`);
+      results[name] = await runner(prompt, verbose);
+      appendVerbose(`[${new Date().toISOString()}] ${label}: ${results[name].available ? 'completed' : 'unavailable'}`);
+    }
+
+    claude = results.claude;
+    codex = results.codex;
+    copilot = results.copilot;
   } else {
     const lastUnavailable = readLastUnavailable(cwd);
     const fallbackOrder = buildFallbackOrder(lastUnavailable);
@@ -721,6 +753,18 @@ export async function runReview(
 
   const verdict = evaluateResults(claude, codex, copilot);
   console.log(`\n${verdict.reason}`);
+
+  if (verboseLogPath && verboseLines.length > 0) {
+    appendVerbose(`\n[${new Date().toISOString()}] Verdict: ${verdict.reason}`);
+    appendVerbose(`Report: ${JSON.stringify(report, null, 2)}`);
+    try {
+      writeFileSync(verboseLogPath, verboseLines.join('\n'), 'utf8');
+      console.log(`Verbose log written to: ${verboseLogPath}`);
+    } catch {
+      console.error(`Warning: could not write verbose log to ${verboseLogPath}`);
+    }
+  }
+
   return { pass: verdict.pass, reportPath, reason: verdict.reason };
 }
 

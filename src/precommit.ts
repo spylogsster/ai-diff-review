@@ -30,6 +30,7 @@ function printLastReport(reportPath: string): void {
 export interface PreCommitOptions {
   verbose?: boolean;
   reviewer?: 'claude' | 'codex' | 'copilot';
+  allReviewers?: boolean;
 }
 
 export interface PreCommitDeps {
@@ -61,7 +62,7 @@ export async function runPreCommit(
     return 1;
   }
 
-  const review = await runReviewFn(cwd, { verbose, reviewer: options.reviewer });
+  const review = await runReviewFn(cwd, { verbose, reviewer: options.reviewer, allReviewers: options.allReviewers });
   if (review.pass) {
     rmSync(failCountPath, { force: true });
     return 0;
