@@ -32,10 +32,11 @@ function printHelp(log: (message: string) => void): void {
   log('  install               Install .githooks/pre-commit and set core.hooksPath');
   log('');
   log('Options:');
-  log('  --codex     Force Codex reviewer only (skip Copilot/Claude fallback)');
-  log('  --copilot   Force Copilot reviewer only (skip Codex/Claude)');
-  log('  --claude    Force Claude reviewer only (skip Codex/Copilot)');
-  log('  --verbose   Print full prompt and raw model outputs to stdout');
+  log('  --codex           Force Codex reviewer only (skip Copilot/Claude fallback)');
+  log('  --copilot         Force Copilot reviewer only (skip Codex/Claude)');
+  log('  --claude          Force Claude reviewer only (skip Codex/Copilot)');
+  log('  --all-reviewers   Run all 3 reviewers sequentially (not just first available)');
+  log('  --verbose         Write full prompt and raw model outputs to .git/ai-review-verbose.log');
 }
 
 export function hasVerboseFlag(args: string[]): boolean {
@@ -54,13 +55,23 @@ export function hasCopilotFlag(args: string[]): boolean {
   return args.includes('--copilot');
 }
 
+export function hasAllReviewersFlag(args: string[]): boolean {
+  return args.includes('--all-reviewers');
+}
+
 export async function runCli(argv = process.argv.slice(2), deps: CliDeps = DEFAULT_CLI_DEPS): Promise<number> {
+  if (argv.includes('--help') || argv.includes('-h')) {
+    printHelp(deps.log);
+    return 0;
+  }
+
   const command = argv[0] || 'help';
   const args = argv.slice(1);
   const verbose = hasVerboseFlag(args);
   const useClaude = hasClaudeFlag(args);
   const useCodex = hasCodexFlag(args);
   const useCopilot = hasCopilotFlag(args);
+  const allReviewers = hasAllReviewersFlag(args);
   const cwd = deps.getCwd();
 
   const selectedCount = [useClaude, useCodex, useCopilot].filter(Boolean).length;
@@ -68,11 +79,15 @@ export async function runCli(argv = process.argv.slice(2), deps: CliDeps = DEFAU
     deps.log('Error: --claude, --codex, and --copilot are mutually exclusive.');
     return 1;
   }
+  if (allReviewers && selectedCount > 0) {
+    deps.log('Error: --all-reviewers cannot be combined with --claude, --codex, or --copilot.');
+    return 1;
+  }
 
   const reviewer = useClaude ? 'claude' as const : useCodex ? 'codex' as const : useCopilot ? 'copilot' as const : undefined;
 
   if (command === 'review') {
-    const result = await deps.runReview(cwd, { verbose, reviewer });
+    const result = await deps.runReview(cwd, { verbose, reviewer, allReviewers });
     return result.pass ? 0 : 1;
   }
 
@@ -84,7 +99,7 @@ export async function runCli(argv = process.argv.slice(2), deps: CliDeps = DEFAU
       deps.log('Error: diff command requires a base branch. Usage: git-ai-review diff <base> [head]');
       return 1;
     }
-    const result = await deps.runReview(cwd, { verbose, reviewer }, {
+    const result = await deps.runReview(cwd, { verbose, reviewer, allReviewers }, {
       getStagedDiff: () => getDiffBetweenRefs(base, head, cwd),
       buildPrompt: (diff, promptCwd) => buildPrompt(diff, promptCwd, `Branch diff (${base}...${head})`),
     });
@@ -92,7 +107,7 @@ export async function runCli(argv = process.argv.slice(2), deps: CliDeps = DEFAU
   }
 
   if (command === 'pre-commit') {
-    return await deps.runPreCommit(cwd, { verbose, reviewer });
+    return await deps.runPreCommit(cwd, { verbose, reviewer, allReviewers });
   }
 
   if (command === 'install') {
