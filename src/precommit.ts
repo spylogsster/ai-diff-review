@@ -64,7 +64,7 @@ export async function runPreCommit(
 
   const review = await runReviewFn(cwd, { verbose, reviewer: options.reviewer, allReviewers: options.allReviewers });
   if (review.pass) {
-    rmSync(failCountPath, { force: true });
+    try { rmSync(failCountPath, { force: true }); } catch { writeFileSync(failCountPath, '0', 'utf8'); }
     return 0;
   }
 

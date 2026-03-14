@@ -386,7 +386,7 @@ async function runClaude(prompt: string, verbose: boolean, skipPreflight = false
 
     const cleanEnv: Record<string, string> = {};
     for (const [key, val] of Object.entries(process.env)) {
-      if (val !== undefined && !(key.toUpperCase().startsWith('CLAUDE') && key.toUpperCase() !== 'CLAUDE_BIN')) {
+      if (val !== undefined && !(key.toUpperCase().startsWith('CLAUDE') && key.toUpperCase() !== 'CLAUDE_BIN' && key.toUpperCase() !== 'CLAUDE_CONFIG_DIR' && key !== 'CLAUDE_CODE_OAUTH_TOKEN')) {
         cleanEnv[key] = val;
       }
     }
